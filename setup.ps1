@@ -110,6 +110,8 @@ if (-not $MosqExe) {
 Write-Host "[4/6] InfluxDB 3 Core controleren..." -ForegroundColor White
 
 $InfluxExe = $null
+
+# Vaste paden controleren
 $influxPaths = @(
     (Join-Path $ProjectDir "influxdb3\influxdb3.exe"),
     (Join-Path (Split-Path $ProjectDir) "influxdb3\influxdb3.exe"),
@@ -119,8 +121,23 @@ $influxPaths = @(
 foreach ($p in $influxPaths) {
     if ($p -and (Test-Path $p)) { $InfluxExe = $p; break }
 }
+
+# Controleer of het op PATH staat
 if (-not $InfluxExe) {
     $InfluxExe = (Get-Command influxdb3 -ErrorAction SilentlyContinue).Source
+}
+
+# Zoek in Downloads-map (mensen pakken de ZIP daar vaak uit)
+if (-not $InfluxExe) {
+    Write-Host "  Zoeken in Downloads-map..." -ForegroundColor Cyan
+    $found = Get-ChildItem "$env:USERPROFILE\Downloads" -Recurse -Filter "influxdb3.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($found) { $InfluxExe = $found.FullName }
+}
+
+# Zoek in de map naast het project (vaak staat alles in dezelfde IoT-map)
+if (-not $InfluxExe) {
+    $found = Get-ChildItem (Split-Path $ProjectDir) -Recurse -Filter "influxdb3.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($found) { $InfluxExe = $found.FullName }
 }
 
 if (-not $InfluxExe) {
