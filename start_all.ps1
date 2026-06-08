@@ -133,7 +133,7 @@ if (-not $MosqExe) {
 
 # 3. MQTT -> InfluxDB bridge (zichtbaar venster zodat je berichten kan zien)
 Write-Host "[3/4] MQTT-bridge starten..." -ForegroundColor Green
-$bridgeCmd = "Set-Location '$ProjectDir'; Write-Host 'MQTT-monitor — berichten verschijnen hier als pucks data sturen.' -ForegroundColor Cyan; Write-Host ''; & '$PyExe' mqtt_influx_bridge.py"
+$bridgeCmd = "Set-Location '$ProjectDir'; Write-Host 'MQTT-monitor - berichten verschijnen hier als pucks data sturen.' -ForegroundColor Cyan; Write-Host ''; & '$PyExe' mqtt_influx_bridge.py"
 Start-InWindow "MQTT-monitor" $bridgeCmd
 Start-Sleep -Seconds 2
 
