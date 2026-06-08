@@ -19,16 +19,14 @@ Gebouwd als uitbreiding op [GoogleFindMyTools](https://github.com/leonbottger/Go
 
 ## Vereisten
 
-Installeer deze software voordat je begint:
+Alleen **Git** en **Windows 10/11** zijn nodig om te beginnen. De rest installeert de setup automatisch.
 
-| Software | Versie | Link |
-|---|---|---|
-| Python | 3.11 of nieuwer | [python.org](https://www.python.org/downloads/) |
-| Google Chrome | laatste versie | [google.com/chrome](https://www.google.com/chrome/) |
-| Mosquitto | 2.x | [mosquitto.org](https://mosquitto.org/download/) |
-| InfluxDB 3 Core | laatste versie | [influxdata.com](https://www.influxdata.com/downloads/) |
-
-> Zorg bij het installeren van Python dat **"Add Python to PATH"** aangevinkt staat.
+Wordt automatisch geïnstalleerd door `SETUP.bat`:
+- Python 3.12 (via winget)
+- Google Chrome (via winget, als nog niet aanwezig)
+- Mosquitto MQTT broker (via winget)
+- InfluxDB 3 Core (automatisch gedownload van GitHub)
+- Alle Python-packages uit `requirements.txt`
 
 ---
 
@@ -43,17 +41,9 @@ cd Integratie-GPS
 
 ### Stap 2 — Setup uitvoeren
 
-Dubbelklik **`SETUP.bat`** of voer het volgende uit in PowerShell:
+Dubbelklik **`SETUP.bat`**.
 
-```powershell
-.\setup.ps1
-```
-
-Dit doet automatisch:
-- virtuele Python-omgeving aanmaken
-- alle vereiste packages installeren (`requirements.txt`)
-- `secrets.h` aanmaken vanuit de template
-- InfluxDB en Mosquitto opzoeken op de machine en opslaan in `local.ps1`
+Het script installeert automatisch alle ontbrekende software, maakt een virtuele Python-omgeving aan en slaat de machine-specifieke paden op in `local.ps1`. Je hoeft zelf niets te configureren voor paden of installaties.
 
 ### Stap 3 — Secrets invullen
 
