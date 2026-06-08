@@ -126,37 +126,74 @@ if (-not $InfluxExe) {
 if (-not $InfluxExe) {
     Write-Host "  InfluxDB niet gevonden, automatisch downloaden..." -ForegroundColor Yellow
     $InfluxDir = Join-Path $ProjectDir "influxdb3"
+    $zipPath   = Join-Path $env:TEMP "influxdb3.zip"
+    $downloaded = $false
 
-    try {
-        Write-Host "  Laatste versie opzoeken via GitHub..." -ForegroundColor Cyan
-        $releases = Invoke-RestMethod "https://api.github.com/repos/influxdata/influxdb/releases?per_page=30" -TimeoutSec 15
-        $v3 = $releases | Where-Object { $_.tag_name -match "^v3\." -and -not $_.prerelease } | Select-Object -First 1
-        $asset = $null
-        if ($v3) {
-            $asset = $v3.assets | Where-Object { $_.name -match "windows" -and $_.name -match "amd64" -and $_.name -match "\.zip$" } | Select-Object -First 1
-        }
-        if ($asset) {
-            $zipPath = Join-Path $env:TEMP "influxdb3.zip"
-            $sizeMB = [math]::Round($asset.size / 1MB, 0)
-            Write-Host "  Downloaden: $($asset.name) ($sizeMB MB)..." -ForegroundColor Cyan
-            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -TimeoutSec 300
-            Write-Host "  Uitpakken naar $InfluxDir..." -ForegroundColor Cyan
-            if (-not (Test-Path $InfluxDir)) { New-Item -ItemType Directory -Path $InfluxDir | Out-Null }
-            Expand-Archive -Path $zipPath -DestinationPath $InfluxDir -Force
-            Remove-Item $zipPath -ErrorAction SilentlyContinue
-            $found = Get-ChildItem $InfluxDir -Recurse -Filter "influxdb3.exe" | Select-Object -First 1
-            if ($found) { $InfluxExe = $found.FullName }
-        }
-    } catch {
-        Write-Host "  Automatisch downloaden mislukt: $_" -ForegroundColor Yellow
+    # Probeer 1: influxdata/influxdb3-core repo
+    # Probeer 2: influxdata/influxdb repo met v3-tag
+    $repoUrls = @(
+        "https://api.github.com/repos/influxdata/influxdb3-core/releases/latest",
+        "https://api.github.com/repos/influxdata/influxdb3-core/releases?per_page=5"
+    )
+    foreach ($url in $repoUrls) {
+        if ($downloaded) { break }
+        try {
+            $data = Invoke-RestMethod $url -TimeoutSec 10 -Headers @{ "User-Agent" = "GPS-Tracker-Setup" }
+            $releases = if ($data -is [array]) { $data } else { @($data) }
+            foreach ($rel in $releases) {
+                $asset = $rel.assets | Where-Object {
+                    $_.name -match "windows" -and $_.name -match "amd64" -and $_.name -match "\.zip$"
+                } | Select-Object -First 1
+                if ($asset) {
+                    $sizeMB = [math]::Round($asset.size / 1MB, 0)
+                    Write-Host "  Downloaden: $($asset.name) ($sizeMB MB)..." -ForegroundColor Cyan
+                    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -TimeoutSec 300
+                    $downloaded = $true
+                    break
+                }
+            }
+        } catch { }
+    }
+
+    # Probeer 3: directe download-URL van influxdata.com
+    if (-not $downloaded) {
+        try {
+            Write-Host "  GitHub mislukt, directe download proberen..." -ForegroundColor Yellow
+            $directUrl = "https://dl.influxdata.com/influxdb/releases/influxdb3-core-latest-windows_amd64.zip"
+            Invoke-WebRequest -Uri $directUrl -OutFile $zipPath -TimeoutSec 300
+            $downloaded = $true
+        } catch { }
+    }
+
+    if ($downloaded -and (Test-Path $zipPath)) {
+        Write-Host "  Uitpakken naar $InfluxDir..." -ForegroundColor Cyan
+        if (-not (Test-Path $InfluxDir)) { New-Item -ItemType Directory -Path $InfluxDir | Out-Null }
+        Expand-Archive -Path $zipPath -DestinationPath $InfluxDir -Force
+        Remove-Item $zipPath -ErrorAction SilentlyContinue
+        $found = Get-ChildItem $InfluxDir -Recurse -Filter "influxdb3.exe" | Select-Object -First 1
+        if ($found) { $InfluxExe = $found.FullName }
     }
 }
 
 if (-not $InfluxExe) {
-    Write-Host "  LET OP: InfluxDB niet gevonden." -ForegroundColor Yellow
-    Write-Host "  Download 'InfluxDB 3 Core' van: https://www.influxdata.com/downloads/" -ForegroundColor Yellow
-    $inp = Read-Host "  Pad naar influxdb3.exe (leeg = overslaan)"
-    if ($inp -and (Test-Path $inp)) { $InfluxExe = $inp }
+    Write-Host ""
+    Write-Host "  Automatisch downloaden is mislukt." -ForegroundColor Yellow
+    Write-Host "  Volg deze stappen om InfluxDB handmatig toe te voegen:" -ForegroundColor White
+    Write-Host ""
+    Write-Host "    1. Ga naar: https://docs.influxdata.com/influxdb3/core/install/" -ForegroundColor Cyan
+    Write-Host "    2. Klik op de dropdown en kies: Windows (AMD64, x86_64) binary" -ForegroundColor Cyan
+    Write-Host "    3. Download het .zip bestand" -ForegroundColor Cyan
+    Write-Host "    4. Pak het uit naar deze map:" -ForegroundColor Cyan
+    Write-Host "       $(Join-Path $ProjectDir 'influxdb3\')" -ForegroundColor Yellow
+    Write-Host "    5. Zorg dat influxdb3.exe in die map staat" -ForegroundColor Cyan
+    Write-Host ""
+    $inp = Read-Host "  Druk ENTER als je klaar bent (of voer het pad naar influxdb3.exe in)"
+    if ($inp -and (Test-Path $inp)) {
+        $InfluxExe = $inp
+    } else {
+        $autoFound = Join-Path $ProjectDir "influxdb3\influxdb3.exe"
+        if (Test-Path $autoFound) { $InfluxExe = $autoFound }
+    }
 } else {
     Write-Host "  OK: $InfluxExe" -ForegroundColor Green
 }
