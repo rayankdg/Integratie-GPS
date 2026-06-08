@@ -66,26 +66,13 @@ Het script installeert automatisch alle ontbrekende software, maakt een virtuele
 6. InfluxDB token aanmaken — de browser opent automatisch, het script legt elke stap uit
 7. Admin-wachtwoord instellen voor de website
 
-### Stap 3 — InfluxDB token aanmaken
+### Stap 3 — InfluxDB token
 
-De setup doet dit automatisch en legt elke stap uit. Voor de volledigheid:
-
-| Stap | Wat je doet |
-|---|---|
-| 1 | Setup start InfluxDB op de achtergrond |
-| 2 | Browser opent naar `http://localhost:8181` |
-| 3 | Klik op **Management** in het linker menu |
-| 4 | Klik op **Tokens** |
-| 5 | Klik op **Generate Token** → **All-Access Token** |
-| 6 | Geef het een naam (bijv. `gps-tracker`) en klik **Generate** |
-| 7 | Kopieer het token — het begint met `apiv3_...` |
-| 8 | Plak het in de setup-terminal en druk ENTER |
-
-> Het token wordt direct opgeslagen in `secrets.h`. Je hoeft het bestand niet handmatig te openen.
+De setup genereert dit **automatisch** — je hoeft hier niets voor te doen. Het token wordt opgeslagen in `secrets.h` en `local.ps1`.
 
 ### Stap 4 — Admin-wachtwoord
 
-De setup vraagt hier direct naar, meteen na het token. Kies een wachtwoord voor het beheerpaneel op de website.
+De setup vraagt om een wachtwoord voor het beheerpaneel op de website. Kies iets wat je kan onthouden.
 
 > `secrets.h` staat in `.gitignore` en wordt nooit gepusht. Gebruik `secrets.h.example` als referentie.
 

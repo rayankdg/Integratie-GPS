@@ -60,8 +60,9 @@ if (-not $MosqExe -or -not (Test-Path $MosqExe)) {
     }
 }
 
-if (-not $InfluxData) { $InfluxData = "$env:USERPROFILE\.influxdb" }
-if (-not $InfluxNode) { $InfluxNode = "$env:COMPUTERNAME-node" }
+if (-not $InfluxData)  { $InfluxData  = "$env:USERPROFILE\.influxdb" }
+if (-not $InfluxNode)  { $InfluxNode  = "$env:COMPUTERNAME-node" }
+if (-not $InfluxToken) { $InfluxToken = "" }
 $MosqConf = Join-Path $ProjectDir "mosquitto.conf"
 
 function Test-Port($port) {
@@ -100,7 +101,7 @@ if (-not $InfluxExe) {
     Write-Host "[1/4] InfluxDB draait al op poort 8181." -ForegroundColor Yellow
 } else {
     Write-Host "[1/4] InfluxDB starten..." -ForegroundColor Green
-    $cmd = "& '$InfluxExe' serve --node-id $InfluxNode --object-store file --data-dir '$InfluxData' --http-bind '127.0.0.1:8181'"
+    $cmd = "`$env:INFLUXDB3_OPERATOR_TOKEN='$InfluxToken'; & '$InfluxExe' serve --node-id $InfluxNode --object-store file --data-dir '$InfluxData' --http-bind '127.0.0.1:8181'"
     Start-InWindow "InfluxDB" $cmd
     Wait-Port 8181 "InfluxDB" | Out-Null
 }

@@ -231,22 +231,7 @@ if (Test-Path $VenvPy) {
     Write-Host "  FOUT: venv aanmaken mislukt." -ForegroundColor Red
 }
 
-# --- 6. local.ps1 opslaan ---
-$NodeName   = $env:COMPUTERNAME + "-node"
-$InfluxData = "$env:USERPROFILE\.influxdb"
-$LocalPs1   = Join-Path $ProjectDir "local.ps1"
-
-$localContent = @"
-# local.ps1 - gegenereerd door setup.ps1 (staat in .gitignore)
-`$PyExe      = "$VenvPy"
-`$InfluxExe  = "$InfluxExe"
-`$InfluxData = "$InfluxData"
-`$InfluxNode = "$NodeName"
-`$MosqExe    = "$MosqExe"
-"@
-$localContent | Out-File -FilePath $LocalPs1 -Encoding utf8
-
-# --- 6b. Secrets interactief invullen ---
+# --- 6. Secrets instellen ---
 Write-Host "[6/6] Configuratie instellen..." -ForegroundColor White
 
 $SecretsH = Join-Path $ProjectDir "secrets.h"
@@ -258,67 +243,61 @@ $content = [System.IO.File]::ReadAllText($SecretsH)
 $needsToken    = $content.Contains("jouw-influxdb-api-token")
 $needsPassword = $content.Contains("verander-dit-wachtwoord")
 
-# InfluxDB token ophalen
+# InfluxDB token: automatisch genereren
+$InfluxToken = $null
 if ($needsToken) {
     Write-Host ""
-    Write-Host "  ======================================" -ForegroundColor Cyan
-    Write-Host "   InfluxDB token aanmaken" -ForegroundColor Cyan
-    Write-Host "  ======================================" -ForegroundColor Cyan
-    Write-Host ""
-
-    $influxProc = $null
-    if ($InfluxExe) {
-        Write-Host "  Stap 1/5  InfluxDB wordt gestart..." -ForegroundColor White
-        $influxArgs = "serve --node-id $NodeName --object-store file --data-dir `"$InfluxData`" --http-bind 127.0.0.1:8181"
-        $influxProc = Start-Process -FilePath $InfluxExe -ArgumentList $influxArgs -PassThru -WindowStyle Minimized -ErrorAction SilentlyContinue
-        Write-Host "             Wachten" -NoNewline
-        for ($i = 0; $i -lt 20; $i++) {
-            Start-Sleep -Seconds 1
-            Write-Host "." -NoNewline
-            try {
-                $r = Invoke-WebRequest "http://127.0.0.1:8181/health" -UseBasicParsing -TimeoutSec 1 -ErrorAction SilentlyContinue
-                if ($r -and $r.StatusCode -lt 500) { break }
-            } catch { }
-        }
-        Write-Host " klaar." -ForegroundColor Green
-    } else {
-        Write-Host "  Stap 1/5  Zorg dat InfluxDB al draait op poort 8181." -ForegroundColor Yellow
-    }
-
-    Write-Host ""
-    Write-Host "  Stap 2/5  De InfluxDB-beheerinterface wordt geopend in je browser." -ForegroundColor White
-    Read-Host "             Druk ENTER om de browser te openen"
-    Start-Process "http://127.0.0.1:8181"
-
-    Write-Host ""
-    Write-Host "  Stap 3/5  Maak een token aan in de browser:" -ForegroundColor White
-    Write-Host "             - Klik op 'Management' in het menu links" -ForegroundColor Gray
-    Write-Host "             - Klik op 'Tokens'" -ForegroundColor Gray
-    Write-Host "             - Klik op 'Generate Token' > 'All-Access Token'" -ForegroundColor Gray
-    Write-Host "             - Geef het een naam (bijv. gps-tracker)" -ForegroundColor Gray
-    Write-Host "             - Klik 'Generate'" -ForegroundColor Gray
-    Read-Host "             Druk ENTER als je het token ziet"
-
-    Write-Host ""
-    Write-Host "  Stap 4/5  Kopieer het token (begint met apiv3_...)." -ForegroundColor White
-    Read-Host "             Druk ENTER als je het gekopieerd hebt"
-
-    Write-Host ""
-    Write-Host "  Stap 5/5  Plak het token hieronder:" -ForegroundColor White
-    $token = Read-Host "             Token"
-
-    if ($token.Trim()) {
-        $content = $content.Replace("jouw-influxdb-api-token", $token.Trim())
-        [System.IO.File]::WriteAllText($SecretsH, $content, [System.Text.UTF8Encoding]::new($false))
-        Write-Host "             OK: token opgeslagen." -ForegroundColor Green
-    } else {
-        Write-Host "             Geen token ingevoerd. Vul het later handmatig in via secrets.h." -ForegroundColor Yellow
-    }
-
-    if ($influxProc -and -not $influxProc.HasExited) {
-        Stop-Process -Id $influxProc.Id -ErrorAction SilentlyContinue
+    Write-Host "  InfluxDB token wordt automatisch aangemaakt..." -ForegroundColor Cyan
+    $bytes = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    $InfluxToken = "apiv3_" + [Convert]::ToBase64String($bytes).Replace("+","a").Replace("/","b").Replace("=","")
+    $content = $content.Replace("jouw-influxdb-api-token", $InfluxToken)
+    [System.IO.File]::WriteAllText($SecretsH, $content, [System.Text.UTF8Encoding]::new($false))
+    Write-Host "  OK: token aangemaakt en opgeslagen in secrets.h." -ForegroundColor Green
+} else {
+    # Lees bestaand token uit secrets.h voor gebruik in local.ps1
+    if ($content -match '#define INFLUX_TOKEN\s+"([^"]+)"') {
+        $InfluxToken = $Matches[1]
     }
 }
+
+# Admin-wachtwoord
+if ($needsPassword) {
+    Write-Host ""
+    Write-Host "  ======================================" -ForegroundColor Cyan
+    Write-Host "   Admin-wachtwoord instellen" -ForegroundColor Cyan
+    Write-Host "  ======================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  Dit wachtwoord gebruik je om in te loggen op de website." -ForegroundColor White
+    Write-Host "  Kies iets wat je kan onthouden (geen spaties)." -ForegroundColor Gray
+    Write-Host ""
+    $password = Read-Host "  Wachtwoord"
+    if ($password.Trim()) {
+        $content = [System.IO.File]::ReadAllText($SecretsH)
+        $content = $content.Replace("verander-dit-wachtwoord", $password.Trim())
+        [System.IO.File]::WriteAllText($SecretsH, $content, [System.Text.UTF8Encoding]::new($false))
+        Write-Host "  OK: wachtwoord opgeslagen." -ForegroundColor Green
+    } else {
+        Write-Host "  Geen wachtwoord ingevoerd. Standaard 'admin' blijft staan." -ForegroundColor Yellow
+    }
+}
+
+# --- local.ps1 opslaan (inclusief InfluxToken voor start_all.ps1) ---
+$NodeName   = $env:COMPUTERNAME + "-node"
+$InfluxData = "$env:USERPROFILE\.influxdb"
+$LocalPs1   = Join-Path $ProjectDir "local.ps1"
+
+$localContent = @"
+# local.ps1 - gegenereerd door setup.ps1 (staat in .gitignore)
+`$PyExe       = "$VenvPy"
+`$InfluxExe   = "$InfluxExe"
+`$InfluxData  = "$InfluxData"
+`$InfluxNode  = "$NodeName"
+`$InfluxToken = "$InfluxToken"
+`$MosqExe     = "$MosqExe"
+"@
+$localContent | Out-File -FilePath $LocalPs1 -Encoding utf8
+Write-Host "  OK: local.ps1 opgeslagen." -ForegroundColor Green
 
 # Admin-wachtwoord
 if ($needsPassword) {
