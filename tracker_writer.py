@@ -29,7 +29,7 @@ def _tprint(*args, **kwargs):
         print(*args, **kwargs)
 
 # ─── Paden ────────────────────────────────────────────────────────────────────
-PROJECT_DIR = Path(r"C:\Users\rayan\Downloads\IoT\GoogleFindMyTools-main\GoogleFindMyTools-main")
+PROJECT_DIR = Path(__file__).parent
 
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)

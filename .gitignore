@@ -194,4 +194,8 @@ __pycache__/
 /data/
 /Auth/token_cache.json
 /Auth/adm_token_cache.json
+
+### Machine-specifieke config (gegenereerd door setup.ps1) ###
+/local.ps1
+/venv/
 # End of https://www.toptal.com/developers/gitignore/api/macos,xcode,swift,swiftpackagemanager,objective-c

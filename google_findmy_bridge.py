@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-import json
 import os
 import platform
 import re
 import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
-from typing import Any
 
 # Adjust this if your cloned GoogleFindMyTools repo lives elsewhere.
-PROJECT_DIR = Path(os.getenv("GOOGLE_FINDMYTOOLS_DIR", r"C:\Users\rayan\Downloads\IoT\GoogleFindMyTools-main\GoogleFindMyTools-main"))
+_env = os.getenv("GOOGLE_FINDMYTOOLS_DIR")
+PROJECT_DIR = Path(_env) if _env else Path(__file__).parent
 
 DEVICE_LINE_RE = re.compile(r"^\s*(\d+)\.\s+(.+?):\s+([\w-]{8,})\s*$", re.MULTILINE)
 

@@ -1,14 +1,13 @@
 @echo off
-REM START.bat - start de hele GPS-Tracker stack als GEWONE gebruiker.
-REM
-REM BELANGRIJK: dit draait bewust NIET als administrator. De Google-login
-REM opent een Chrome via nodriver, en dat werkt niet vanuit een admin-proces
-REM ("Failed to connect to browser"). Daarom geen self-elevation meer.
-REM
-REM Eenmalig vooraf (in een ADMIN-terminal) de Mosquitto-service uitschakelen,
-REM zodat poort 1883 vrij is zonder admin:
-REM     Stop-Service mosquitto
-REM     Set-Service mosquitto -StartupType Disabled
+REM START.bat — start de GPS Tracker stack.
+REM Draai SETUP.bat eerst als je dit project net gecloned hebt.
+
+if not exist "%~dp0local.ps1" (
+    echo.
+    echo  Setup nog niet uitgevoerd. Setup wordt nu automatisch gestart...
+    echo.
+    powershell -ExecutionPolicy Bypass -File "%~dp0setup.ps1"
+)
 
 powershell -ExecutionPolicy Bypass -File "%~dp0start_all.ps1"
 echo.
