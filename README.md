@@ -34,14 +34,26 @@ Wordt automatisch geïnstalleerd door `SETUP.bat`:
 
 ### Stap 1 — Repository clonen
 
+Open een terminal (cmd of PowerShell) en voer uit:
+
 ```bash
 git clone https://github.com/rayankdg/Integratie-GPS.git
-cd Integratie-GPS
 ```
+
+Je kan ook rechtstreeks op GitHub klikken op **Code → Download ZIP**, het ZIP-bestand uitpakken en de map openen.
+
+> VS Code gebruikers: als je clonet via VS Code, klik daarna op **Open Folder** en selecteer de `Integratie-GPS` map zodat je de bestanden ziet.
 
 ### Stap 2 — Setup uitvoeren
 
-Dubbelklik **`SETUP.bat`**.
+Open de gekloonde map in **Verkenner** (File Explorer).  
+Dubbelklik op **`SETUP.bat`**.
+
+Heb je de map al open in een terminal? Dan kan het ook zo:
+
+```powershell
+.\SETUP.bat
+```
 
 Het script installeert automatisch alle ontbrekende software, maakt een virtuele Python-omgeving aan en slaat de machine-specifieke paden op in `local.ps1`. Je hoeft zelf niets te configureren voor paden of installaties.
 
