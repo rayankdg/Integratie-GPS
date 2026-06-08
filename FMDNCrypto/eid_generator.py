@@ -5,8 +5,6 @@
 from Cryptodome.Cipher import AES
 from ecdsa import SECP160r1
 
-from example_data_provider import get_example_data
-
 # Constants
 K = 10
 ROTATION_PERIOD = 1024  # 2^K seconds
@@ -64,7 +62,7 @@ def get_masked_timestamp(timestamp: int, K: int):
 
 
 if __name__ == '__main__':
-
+    from example_data_provider import get_example_data
     sample_identity_key = get_example_data("sample_identity_key")
 
     # Generate EIDs

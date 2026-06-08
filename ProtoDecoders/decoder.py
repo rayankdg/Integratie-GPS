@@ -11,7 +11,6 @@ import datetime
 import pytz
 
 from ProtoDecoders import DeviceUpdate_pb2, LocationReportsUpload_pb2
-from example_data_provider import get_example_data
 
 
 # Custom message formatter to print the Protobuf byte fields as hex strings
@@ -93,6 +92,7 @@ def print_device_list_protobuf(hex_string):
 
 
 if __name__ == '__main__':
+    from example_data_provider import get_example_data
     # Recompile
     subprocess.run(["protoc", "--python_out=.", "ProtoDecoders/Common.proto"], cwd="../")
     subprocess.run(["protoc", "--python_out=.", "ProtoDecoders/DeviceUpdate.proto"], cwd="../")

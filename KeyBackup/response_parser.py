@@ -5,7 +5,6 @@
 
 import json
 
-from example_data_provider import get_example_data
 
 def _transform_to_byte_array(json_object):
     byte_array = bytearray(json_object[str(i)] for i in range(len(json_object)))
@@ -38,5 +37,6 @@ def get_fmdn_shared_key(vault_keys):
 
 
 if __name__ == '__main__':
+    from example_data_provider import get_example_data
     vault_keys = get_example_data("sample_vault_keys")
     print(get_fmdn_shared_key(vault_keys).hex())

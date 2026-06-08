@@ -8,7 +8,6 @@ from concurrent.futures import ProcessPoolExecutor
 import time
 import pyscrypt
 
-from example_data_provider import get_example_data
 
 
 def ascii_to_bytes(string):
@@ -47,6 +46,7 @@ def hash_pin(pin):
 
 
 if __name__ == '__main__':
+    from example_data_provider import get_example_data
     start_time = time.time()
     pins = [f"{i:04d}" for i in range(10000)]
 

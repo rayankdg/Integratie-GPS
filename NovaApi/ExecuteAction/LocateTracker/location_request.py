@@ -14,7 +14,6 @@ from NovaApi.scopes import NOVA_ACTION_API_SCOPE
 from NovaApi.util import generate_random_uuid
 from ProtoDecoders import DeviceUpdate_pb2
 from ProtoDecoders.decoder import parse_device_update_protobuf
-from example_data_provider import get_example_data
 
 def create_location_request(canonic_device_id, fcm_registration_id, request_uuid):
 
@@ -57,4 +56,5 @@ def get_location_data_for_device(canonic_device_id, name):
     decrypt_location_response_locations(result)
 
 if __name__ == '__main__':
+    from example_data_provider import get_example_data
     get_location_data_for_device(get_example_data("sample_canonic_device_id"), "Test")

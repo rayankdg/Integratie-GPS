@@ -13,7 +13,6 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.backends import default_backend
 
 from KeyBackup.lskf_hasher import ascii_to_bytes, get_lskf_hash
-from example_data_provider import get_example_data
 
 # Constants
 VERSION = b'\x02\x00'
@@ -181,6 +180,7 @@ def decrypt_account_key(owner_key: bytes, encrypted_account_key: bytes) -> bytes
 
 
 if __name__ == '__main__':
+    from example_data_provider import get_example_data
 
     # Load sample data
     pin = get_example_data("sample_pin")

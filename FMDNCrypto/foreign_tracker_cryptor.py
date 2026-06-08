@@ -13,7 +13,6 @@ from cryptography.hazmat.primitives import hashes
 from ecdsa.ellipticcurve import Point
 
 from FMDNCrypto.eid_generator import generate_eid, calculate_r
-from example_data_provider import get_example_data
 
 
 def rx_to_ry(Rx: int, curve) -> int:
@@ -136,6 +135,7 @@ def decrypt(identity_key: bytes, encryptedAndTag: bytes, Sx: bytes, beacon_time_
 
 
 if __name__ == "__main__":
+    from example_data_provider import get_example_data
     # 4-byte timestamp
     timestamp = 0x0084D000
 
