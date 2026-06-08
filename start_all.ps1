@@ -1,15 +1,14 @@
-# start_all.ps1 — start de volledige GPS-Tracker stack
-# ======================================================
+# start_all.ps1 - start de volledige GPS-Tracker stack
 # Volgorde:
 #   1. InfluxDB 3 Core   (poort 8181)
 #   2. Mosquitto broker  (poort 1883 + 9001 websockets)
-#   3. MQTT → InfluxDB bridge
+#   3. MQTT -> InfluxDB bridge
 #   4. Website-backend   (uvicorn, poort 8000)
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $ProjectDir = $PSScriptRoot
 
-# ─── Machine-specifieke config laden (aangemaakt door setup.ps1) ──────────────
+# Machine-specifieke config laden (aangemaakt door setup.ps1)
 $LocalConfig = Join-Path $PSScriptRoot "local.ps1"
 if (Test-Path $LocalConfig) {
     . $LocalConfig
@@ -22,9 +21,7 @@ if (Test-Path $LocalConfig) {
     exit 1
 }
 
-# ─── Fallbacks als local.ps1 iets mist ───────────────────────────────────────
-
-# Python: venv in projectmap, anders systeem-Python
+# Python: venv eerst, daarna systeem-Python
 if (-not $PyExe -or -not (Test-Path $PyExe)) {
     $venvCandidate = Join-Path $PSScriptRoot "venv\Scripts\python.exe"
     if (Test-Path $venvCandidate) {
@@ -32,13 +29,14 @@ if (-not $PyExe -or -not (Test-Path $PyExe)) {
     } else {
         $PyExe = (Get-Command python -ErrorAction SilentlyContinue).Source
         if (-not $PyExe) {
-            Write-Host "Python niet gevonden. Draai setup.ps1 opnieuw." -ForegroundColor Red
+            Write-Host "Python niet gevonden. Draai SETUP.bat opnieuw." -ForegroundColor Red
+            Read-Host "Druk ENTER om af te sluiten"
             exit 1
         }
     }
 }
 
-# InfluxDB: zoek op vaste locaties als local.ps1 het pad kwijt is
+# InfluxDB: zoek op bekende locaties als local.ps1 het pad kwijt is
 if (-not $InfluxExe -or -not (Test-Path $InfluxExe)) {
     foreach ($p in @(
         (Join-Path $PSScriptRoot "influxdb3\influxdb3.exe"),
@@ -66,8 +64,6 @@ if (-not $InfluxData) { $InfluxData = "$env:USERPROFILE\.influxdb" }
 if (-not $InfluxNode) { $InfluxNode = "$env:COMPUTERNAME-node" }
 $MosqConf = Join-Path $ProjectDir "mosquitto.conf"
 
-# ─── Hulpfuncties ─────────────────────────────────────────────────────────────
-
 function Test-Port($port) {
     try {
         $c = New-Object System.Net.Sockets.TcpClient
@@ -93,15 +89,13 @@ function Start-InWindow($title, $command) {
     Start-Process powershell -ArgumentList "-NoExit", "-Command", $inner
 }
 
-# ─── Stack starten ────────────────────────────────────────────────────────────
-
 Write-Host ""
 Write-Host "=== GPS Tracker stack starten ===" -ForegroundColor Cyan
 Write-Host ""
 
 # 1. InfluxDB
 if (-not $InfluxExe) {
-    Write-Host "[1/4] InfluxDB overgeslagen (niet geconfigureerd — draai setup.ps1)." -ForegroundColor Yellow
+    Write-Host "[1/4] InfluxDB overgeslagen (niet gevonden - draai SETUP.bat)." -ForegroundColor Yellow
 } elseif (Test-Port 8181) {
     Write-Host "[1/4] InfluxDB draait al op poort 8181." -ForegroundColor Yellow
 } else {
@@ -113,7 +107,7 @@ if (-not $InfluxExe) {
 
 # 2. Mosquitto
 if (-not $MosqExe) {
-    Write-Host "[2/4] Mosquitto overgeslagen (niet gevonden — draai setup.ps1)." -ForegroundColor Yellow
+    Write-Host "[2/4] Mosquitto overgeslagen (niet gevonden - draai SETUP.bat)." -ForegroundColor Yellow
 } elseif (Test-Port 9001) {
     Write-Host "[2/4] Mosquitto draait al (poort 9001)." -ForegroundColor Yellow
 } else {
@@ -125,7 +119,6 @@ if (-not $MosqExe) {
             Start-Sleep -Seconds 1
         } catch {
             Write-Host "[2/4] LET OP: kon Mosquitto-service niet stoppen (admin nodig)." -ForegroundColor Red
-            Write-Host "      Live kaart (poort 9001) werkt mogelijk niet." -ForegroundColor Red
         }
     }
     if (-not (Test-Port 1883)) {
@@ -133,11 +126,11 @@ if (-not $MosqExe) {
         Start-InWindow "Mosquitto" "& '$MosqExe' -c '$MosqConf' -v"
         Wait-Port 1883 "Mosquitto" | Out-Null
     } else {
-        Write-Host "[2/4] Poort 1883 bezet — websockets mogelijk niet actief." -ForegroundColor Yellow
+        Write-Host "[2/4] Poort 1883 bezet - websockets mogelijk niet actief." -ForegroundColor Yellow
     }
 }
 
-# 3. MQTT → InfluxDB bridge
+# 3. MQTT -> InfluxDB bridge
 Write-Host "[3/4] Bridge starten..." -ForegroundColor Green
 Start-InWindow "Bridge MQTT-InfluxDB" "Set-Location '$ProjectDir'; & '$PyExe' mqtt_influx_bridge.py"
 Start-Sleep -Seconds 2
