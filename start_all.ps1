@@ -14,8 +14,11 @@ $LocalConfig = Join-Path $PSScriptRoot "local.ps1"
 if (Test-Path $LocalConfig) {
     . $LocalConfig
 } else {
-    Write-Host "local.ps1 niet gevonden. Draai eerst setup.ps1 (of dubbelklik SETUP.bat)." -ForegroundColor Red
-    Read-Host "Druk ENTER om af te sluiten"
+    Write-Host ""
+    Write-Host "  Setup is nog niet uitgevoerd." -ForegroundColor Red
+    Write-Host "  Dubbelklik eerst op SETUP.bat en doorloop de installatie." -ForegroundColor Yellow
+    Write-Host ""
+    Read-Host "  Druk ENTER om af te sluiten"
     exit 1
 }
 
