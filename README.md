@@ -55,18 +55,37 @@ Heb je de map al open in een terminal? Dan kan het ook zo:
 .\SETUP.bat
 ```
 
-Het script installeert automatisch alle ontbrekende software, maakt een virtuele Python-omgeving aan en slaat de machine-specifieke paden op in `local.ps1`. Je hoeft zelf niets te configureren voor paden of installaties.
+Het script installeert automatisch alle ontbrekende software, maakt een virtuele Python-omgeving aan en begeleidt je daarna stap voor stap door de configuratie. Je hoeft zelf niets handmatig in te stellen.
 
-### Stap 3 — Secrets invullen
+**Wat de setup doorloopt:**
+1. Python 3.12 installeren (via winget)
+2. Google Chrome installeren (via winget)
+3. Mosquitto installeren (via winget)
+4. InfluxDB 3 Core downloaden en uitpakken
+5. Python-packages installeren
+6. InfluxDB token aanmaken — de browser opent automatisch, het script legt elke stap uit
+7. Admin-wachtwoord instellen voor de website
 
-Open `secrets.h` (aangemaakt in stap 2) en vul je eigen waarden in:
+### Stap 3 — InfluxDB token aanmaken
 
-```c
-#define INFLUX_TOKEN    "jouw-influxdb-api-token"
-#define ADMIN_PASSWORD  "kies-een-sterk-wachtwoord"
-```
+De setup doet dit automatisch en legt elke stap uit. Voor de volledigheid:
 
-De overige waarden (`INFLUX_HOST`, `MQTT_HOST`, ...) kloppen standaard als alles lokaal draait.
+| Stap | Wat je doet |
+|---|---|
+| 1 | Setup start InfluxDB op de achtergrond |
+| 2 | Browser opent naar `http://localhost:8181` |
+| 3 | Klik op **Management** in het linker menu |
+| 4 | Klik op **Tokens** |
+| 5 | Klik op **Generate Token** → **All-Access Token** |
+| 6 | Geef het een naam (bijv. `gps-tracker`) en klik **Generate** |
+| 7 | Kopieer het token — het begint met `apiv3_...` |
+| 8 | Plak het in de setup-terminal en druk ENTER |
+
+> Het token wordt direct opgeslagen in `secrets.h`. Je hoeft het bestand niet handmatig te openen.
+
+### Stap 4 — Admin-wachtwoord
+
+De setup vraagt hier direct naar, meteen na het token. Kies een wachtwoord voor het beheerpaneel op de website.
 
 > `secrets.h` staat in `.gitignore` en wordt nooit gepusht. Gebruik `secrets.h.example` als referentie.
 
