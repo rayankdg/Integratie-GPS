@@ -1,75 +1,64 @@
-# setup.ps1 — eenmalige installatie voor GPS Tracker
-# =====================================================
-# Draai dit één keer na het clonen van de repo.
-# Daarna gebruik je gewoon START.bat om alles op te starten.
+# setup.ps1 - eenmalige installatie voor GPS Tracker
+# Draai dit een keer na het clonen van de repo.
+# Daarna gebruik je gewoon START.bat.
 
 $ErrorActionPreference = "Continue"
 $ProjectDir = $PSScriptRoot
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  GPS Tracker — Eerste installatie" -ForegroundColor Cyan
+Write-Host "  GPS Tracker - Eerste installatie" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ─── Hulpfuncties ─────────────────────────────────────────────────────────────
+$HasWinGet = [bool](Get-Command winget -ErrorAction SilentlyContinue)
 
-function Test-WinGet {
-    return [bool](Get-Command winget -ErrorAction SilentlyContinue)
-}
-
-function Install-ViaWinGet($id, $label) {
-    Write-Host "  Installeren via winget: $label..." -ForegroundColor Cyan
-    winget install --id $id --accept-package-agreements --accept-source-agreements --silent 2>&1 | Out-Null
-    return $LASTEXITCODE -eq 0
-}
-
-function Find-Exe($searchPaths, $command) {
-    foreach ($p in $searchPaths) {
-        if ($p -and (Test-Path $p)) { return $p }
-    }
-    $found = (Get-Command $command -ErrorAction SilentlyContinue).Source
-    return $found
-}
-
-# ─── 1. Python ────────────────────────────────────────────────────────────────
+# --- 1. Python ---
 Write-Host "[1/6] Python controleren..." -ForegroundColor White
 
 $Python = (Get-Command python -ErrorAction SilentlyContinue).Source
 if (-not $Python) {
-    if (Test-WinGet) {
+    if ($HasWinGet) {
         Write-Host "  Python niet gevonden, installeren via winget..." -ForegroundColor Yellow
-        Install-ViaWinGet "Python.Python.3.12" "Python 3.12" | Out-Null
-        # PATH bijwerken na installatie
-        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+        winget install --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements --silent
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" +
+                    [System.Environment]::GetEnvironmentVariable("PATH","User")
         $Python = (Get-Command python -ErrorAction SilentlyContinue).Source
     }
 }
 
 if (-not $Python) {
-    Write-Host "  FOUT: Python niet gevonden en kon niet automatisch installeren." -ForegroundColor Red
-    Write-Host "  Download handmatig van: https://www.python.org/downloads/" -ForegroundColor Yellow
+    Write-Host "  FOUT: Python niet gevonden." -ForegroundColor Red
+    Write-Host "  Download van: https://www.python.org/downloads/" -ForegroundColor Yellow
     Write-Host "  Zet vinkje bij 'Add Python to PATH' tijdens installatie." -ForegroundColor Yellow
     Read-Host "  Druk ENTER om af te sluiten"
     exit 1
 }
 Write-Host "  OK: $Python" -ForegroundColor Green
 
-# ─── 2. Google Chrome ─────────────────────────────────────────────────────────
+# --- 2. Google Chrome ---
 Write-Host "[2/6] Google Chrome controleren..." -ForegroundColor White
 
+$Chrome = $null
 $chromePaths = @(
     "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
     "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
     "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
 )
-$Chrome = Find-Exe $chromePaths "chrome"
+foreach ($p in $chromePaths) {
+    if (Test-Path $p) { $Chrome = $p; break }
+}
+if (-not $Chrome) {
+    $Chrome = (Get-Command chrome -ErrorAction SilentlyContinue).Source
+}
 
 if (-not $Chrome) {
-    if (Test-WinGet) {
+    if ($HasWinGet) {
         Write-Host "  Chrome niet gevonden, installeren via winget..." -ForegroundColor Yellow
-        Install-ViaWinGet "Google.Chrome" "Google Chrome" | Out-Null
-        $Chrome = Find-Exe $chromePaths "chrome"
+        winget install --id Google.Chrome --accept-package-agreements --accept-source-agreements --silent
+        foreach ($p in $chromePaths) {
+            if (Test-Path $p) { $Chrome = $p; break }
+        }
     }
 }
 
@@ -78,45 +67,61 @@ if ($Chrome) {
 } else {
     Write-Host "  LET OP: Chrome niet gevonden." -ForegroundColor Yellow
     Write-Host "  Download van: https://www.google.com/chrome/" -ForegroundColor Yellow
-    Write-Host "  Chrome is vereist voor de Google-login." -ForegroundColor Yellow
 }
 
-# ─── 3. Mosquitto ─────────────────────────────────────────────────────────────
+# --- 3. Mosquitto ---
 Write-Host "[3/6] Mosquitto controleren..." -ForegroundColor White
 
+$MosqExe = $null
 $mosqPaths = @(
     "$env:ProgramFiles\Mosquitto\mosquitto.exe",
     "C:\Program Files\Mosquitto\mosquitto.exe"
 )
-$MosqExe = Find-Exe $mosqPaths "mosquitto"
+foreach ($p in $mosqPaths) {
+    if (Test-Path $p) { $MosqExe = $p; break }
+}
+if (-not $MosqExe) {
+    $MosqExe = (Get-Command mosquitto -ErrorAction SilentlyContinue).Source
+}
 
 if (-not $MosqExe) {
-    if (Test-WinGet) {
+    if ($HasWinGet) {
         Write-Host "  Mosquitto niet gevonden, installeren via winget..." -ForegroundColor Yellow
-        Install-ViaWinGet "EclipseFoundation.Mosquitto" "Mosquitto" | Out-Null
-        $MosqExe = Find-Exe $mosqPaths "mosquitto"
+        winget install --id EclipseFoundation.Mosquitto --accept-package-agreements --accept-source-agreements --silent
+        foreach ($p in $mosqPaths) {
+            if (Test-Path $p) { $MosqExe = $p; break }
+        }
+        if (-not $MosqExe) {
+            $MosqExe = (Get-Command mosquitto -ErrorAction SilentlyContinue).Source
+        }
     }
 }
 
 if (-not $MosqExe) {
-    Write-Host "  LET OP: Mosquitto niet gevonden na installatie." -ForegroundColor Yellow
+    Write-Host "  LET OP: Mosquitto niet gevonden." -ForegroundColor Yellow
     Write-Host "  Download van: https://mosquitto.org/download/" -ForegroundColor Yellow
-    $input = Read-Host "  Pad naar mosquitto.exe (leeg = overslaan)"
-    if ($input -and (Test-Path $input)) { $MosqExe = $input }
+    $inp = Read-Host "  Pad naar mosquitto.exe (leeg = overslaan)"
+    if ($inp -and (Test-Path $inp)) { $MosqExe = $inp }
 } else {
     Write-Host "  OK: $MosqExe" -ForegroundColor Green
 }
 
-# ─── 4. InfluxDB 3 Core ───────────────────────────────────────────────────────
+# --- 4. InfluxDB 3 Core ---
 Write-Host "[4/6] InfluxDB 3 Core controleren..." -ForegroundColor White
 
-$influxSearchPaths = @(
+$InfluxExe = $null
+$influxPaths = @(
     (Join-Path $ProjectDir "influxdb3\influxdb3.exe"),
     (Join-Path (Split-Path $ProjectDir) "influxdb3\influxdb3.exe"),
     "$env:LOCALAPPDATA\influxdb3\influxdb3.exe",
     "$env:ProgramFiles\InfluxData\InfluxDB\influxdb3.exe"
 )
-$InfluxExe = Find-Exe $influxSearchPaths "influxdb3"
+foreach ($p in $influxPaths) {
+    if ($p -and (Test-Path $p)) { $InfluxExe = $p; break }
+}
+if (-not $InfluxExe) {
+    $InfluxExe = (Get-Command influxdb3 -ErrorAction SilentlyContinue).Source
+}
 
 if (-not $InfluxExe) {
     Write-Host "  InfluxDB niet gevonden, automatisch downloaden..." -ForegroundColor Yellow
@@ -130,17 +135,15 @@ if (-not $InfluxExe) {
         if ($v3) {
             $asset = $v3.assets | Where-Object { $_.name -match "windows" -and $_.name -match "amd64" -and $_.name -match "\.zip$" } | Select-Object -First 1
         }
-
         if ($asset) {
             $zipPath = Join-Path $env:TEMP "influxdb3.zip"
-            Write-Host ("  Downloaden: {0} ({1:N0} MB)..." -f $asset.name, ($asset.size / 1MB)) -ForegroundColor Cyan
+            $sizeMB = [math]::Round($asset.size / 1MB, 0)
+            Write-Host "  Downloaden: $($asset.name) ($sizeMB MB)..." -ForegroundColor Cyan
             Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -TimeoutSec 300
             Write-Host "  Uitpakken naar $InfluxDir..." -ForegroundColor Cyan
             if (-not (Test-Path $InfluxDir)) { New-Item -ItemType Directory -Path $InfluxDir | Out-Null }
             Expand-Archive -Path $zipPath -DestinationPath $InfluxDir -Force
             Remove-Item $zipPath -ErrorAction SilentlyContinue
-
-            # influxdb3.exe kan in een submap zitten na uitpakken
             $found = Get-ChildItem $InfluxDir -Recurse -Filter "influxdb3.exe" | Select-Object -First 1
             if ($found) { $InfluxExe = $found.FullName }
         }
@@ -151,15 +154,14 @@ if (-not $InfluxExe) {
 
 if (-not $InfluxExe) {
     Write-Host "  LET OP: InfluxDB niet gevonden." -ForegroundColor Yellow
-    Write-Host "  Download van: https://www.influxdata.com/downloads/" -ForegroundColor Yellow
-    Write-Host "  Kies 'InfluxDB 3 Core' voor Windows." -ForegroundColor Yellow
-    $input = Read-Host "  Pad naar influxdb3.exe (leeg = overslaan)"
-    if ($input -and (Test-Path $input)) { $InfluxExe = $input }
+    Write-Host "  Download 'InfluxDB 3 Core' van: https://www.influxdata.com/downloads/" -ForegroundColor Yellow
+    $inp = Read-Host "  Pad naar influxdb3.exe (leeg = overslaan)"
+    if ($inp -and (Test-Path $inp)) { $InfluxExe = $inp }
 } else {
     Write-Host "  OK: $InfluxExe" -ForegroundColor Green
 }
 
-# ─── 5. Python venv + requirements ────────────────────────────────────────────
+# --- 5. Python venv + requirements ---
 Write-Host "[5/6] Virtuele omgeving aanmaken en pakketten installeren..." -ForegroundColor White
 
 $VenvPy = Join-Path $ProjectDir "venv\Scripts\python.exe"
@@ -175,7 +177,7 @@ if (Test-Path $VenvPy) {
     Write-Host "  FOUT: venv aanmaken mislukt." -ForegroundColor Red
 }
 
-# ─── 6. Secrets + local.ps1 ───────────────────────────────────────────────────
+# --- 6. Secrets + local.ps1 ---
 Write-Host "[6/6] Configuratie opslaan..." -ForegroundColor White
 
 $SecretsH = Join-Path $ProjectDir "secrets.h"
@@ -183,25 +185,25 @@ if (-not (Test-Path $SecretsH)) {
     Copy-Item (Join-Path $ProjectDir "secrets.h.example") $SecretsH
     Write-Host "  OK: secrets.h aangemaakt vanuit template." -ForegroundColor Green
 } else {
-    Write-Host "  OK: secrets.h bestaat al (ongewijzigd)." -ForegroundColor Green
+    Write-Host "  OK: secrets.h bestaat al." -ForegroundColor Green
 }
 
 $NodeName   = $env:COMPUTERNAME + "-node"
 $InfluxData = "$env:USERPROFILE\.influxdb"
 $LocalPs1   = Join-Path $ProjectDir "local.ps1"
 
-@"
-# local.ps1 — gegenereerd door setup.ps1 (staat in .gitignore)
+$localContent = @"
+# local.ps1 - gegenereerd door setup.ps1 (staat in .gitignore)
 `$PyExe      = "$VenvPy"
 `$InfluxExe  = "$InfluxExe"
 `$InfluxData = "$InfluxData"
 `$InfluxNode = "$NodeName"
 `$MosqExe    = "$MosqExe"
-"@ | Out-File -FilePath $LocalPs1 -Encoding utf8
-
+"@
+$localContent | Out-File -FilePath $LocalPs1 -Encoding utf8
 Write-Host "  OK: local.ps1 opgeslagen." -ForegroundColor Green
 
-# ─── Klaar ────────────────────────────────────────────────────────────────────
+# --- Klaar ---
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Installatie klaar!" -ForegroundColor Green
