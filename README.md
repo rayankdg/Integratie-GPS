@@ -45,3 +45,11 @@ For more information, check the [README in the ZephyrFirmware folder](ZephyrFirm
 
 ### iOS App
 You can also use my [iOS App](https://testflight.apple.com/join/rGqa2mTe) to access your Find My Device trackers on the go.
+
+---
+
+### Team
+- Rayan ([@rayankdg](https://github.com/rayankdg))
+- Valentina
+- Mohammed ([@menoilimohmammedriyad-del](https://github.com/menoilimohmammedriyad-del))
+- Asif ([@Asifbenhaddou](https://github.com/Asifbenhaddou))
