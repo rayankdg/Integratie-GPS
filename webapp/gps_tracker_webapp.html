@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPS Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --s1: #111318;
+      --s2: #181b22;
+      --s3: #1e2230;
+      --border: rgba(255,255,255,0.07);
+      --text: #e8eaf0;
+      --muted: #4a5268;
+      --accent: #4fffb0;
+      --blue: #00cfff;
+      --warn: #ffb740;
+      --bad: #ff5060;
+      --mono: 'DM Mono', monospace;
+      --sans: 'Syne', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); display: flex; flex-direction: column; }
+
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 28px; border-bottom: 1px solid var(--border);
+      background: rgba(10,12,16,0.95); backdrop-filter: blur(12px);
+      flex-shrink: 0; gap: 16px; flex-wrap: wrap;
+      position: relative; z-index: 1000;
+    }
+    .logo { font-size: 17px; font-weight: 800; letter-spacing: -0.3px; display: flex; align-items: center; gap: 9px; }
+    .logo-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: blink 2s infinite; }
+    @keyframes blink { 0%,100%{opacity:1;box-shadow:0 0 10px var(--accent)} 50%{opacity:.4;box-shadow:none} }
+    .hdr-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .settings-wrap { position: relative; }
+    .settings-pop { position: absolute; right: 0; top: calc(100% + 10px); width: 250px; background: var(--s1); border: 1px solid var(--border); border-radius: 11px; padding: 14px 16px; box-shadow: 0 16px 50px rgba(0,0,0,.55); z-index: 400; }
+    .settings-pop .text-input { width: 100%; }
+    .settings-actions { display: flex; gap: 8px; margin-top: 14px; }
+    .url-input, .text-input {
+      background: var(--s1); border: 1px solid var(--border); color: var(--text);
+      border-radius: 7px; padding: 7px 11px; font-family: var(--mono); font-size: 12px;
+      outline: none; transition: border-color .2s;
+    }
+    .url-input { width: 210px; }
+    .text-input { width: 100%; }
+    .url-input:focus, .text-input:focus { border-color: var(--accent); }
+    .btn { font-family: var(--sans); font-weight: 700; font-size: 12px; padding: 7px 14px; border-radius: 7px; border: none; cursor: pointer; transition: opacity .15s, transform .1s; white-space: nowrap; }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { opacity: .85; }
+    .btn-ghost { background: var(--s2); color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover { border-color: rgba(255,255,255,.2); }
+    .btn-danger { background: rgba(255,80,96,.12); color: var(--bad); border: 1px solid rgba(255,80,96,.25); }
+    .btn-danger:hover { background: rgba(255,80,96,.22); }
+
+    .mqtt-pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--s2); color: var(--muted); white-space: nowrap; }
+    .mqtt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+    .mqtt-pill.on   { color: var(--accent); border-color: rgba(79,255,176,.35); }
+    .mqtt-pill.on   .mqtt-dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .mqtt-pill.connecting { color: var(--warn); border-color: rgba(255,183,64,.35); }
+    .mqtt-pill.connecting .mqtt-dot { background: var(--warn); animation: blink 1.2s infinite; }
+    .mqtt-pill.off  .mqtt-dot { background: var(--bad); }
+
+    /* Admin-only bedieningselementen: verborgen voor bezoekers, zichtbaar na admin-login */
+    body:not(.admin) .admin-only { display: none !important; }
+
+    #ticker {
+      display: flex; align-items: center; gap: 12px;
+      padding: 6px 24px; font-family: var(--mono); font-size: 11px;
+      color: var(--muted); border-bottom: 1px solid var(--border);
+      background: var(--s1); flex-shrink: 0; min-height: 30px;
+    }
+    #ticker-msg { color: var(--accent); }
+    #ticker-time { margin-left: auto; }
+
+    .layout { display: grid; grid-template-columns: 380px 1fr; flex: 1; overflow: hidden; }
+    .sidebar { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; background: var(--s1); }
+    .sb-header {
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+      color: var(--muted); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+    }
+    #puck-count { background: var(--s2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; font-size: 11px; color: var(--text); font-family: var(--mono); }
+    .sidebar-section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 700; margin-bottom: 10px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .form-grid.one { grid-template-columns: 1fr; }
+    .form-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .hint { font-family: var(--mono); font-size: 10px; color: var(--muted); line-height: 1.5; margin-top: 8px; }
+    .discover-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+    .disc-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: var(--s2); border: 1px solid var(--border); border-radius: 7px; }
+    .disc-meta { min-width: 0; }
+    .disc-name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .disc-id { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .disc-add { font-family: var(--sans); font-weight: 700; font-size: 11px; padding: 5px 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #000; white-space: nowrap; }
+    .disc-add:hover { opacity: .85; }
+    .disc-added { font-family: var(--mono); font-size: 10px; color: var(--accent); white-space: nowrap; padding: 5px 4px; }
+    .disc-status { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 8px; }
+    .puck-list { overflow-y: auto; flex: 1; min-height: 80px; }
+    .sidebar-section { flex-shrink: 0; }
+    .puck-card {
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background .15s; position: relative;
+    }
+    .puck-card:hover { background: rgba(255,255,255,.02); }
+    .puck-card.active { background: rgba(79,255,176,.05); }
+    .puck-card.active::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; border-radius:0 2px 2px 0; background: var(--accent); }
+    .pc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; gap: 10px; }
+    .pc-name { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 7px; }
+    .pc-del, .pc-edit { opacity: 0; background: none; border: none; color: var(--bad); cursor: pointer; font-size: 15px; padding: 2px 5px; border-radius: 4px; transition: opacity .15s, background .15s; }
+    .pc-edit { color: var(--blue); }
+    .puck-card:hover .pc-del, .puck-card:hover .pc-edit { opacity: 1; }
+    .pc-del:hover { background: rgba(255,80,96,.15); }
+    .pc-edit:hover { background: rgba(0,207,255,.12); }
+    .pc-id { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+    .pc-coords { font-family: var(--mono); font-size: 11px; color: var(--blue); margin-bottom: 6px; }
+    .display-toggle { font-family: var(--sans); font-weight: 700; font-size: 11px; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--border); background: var(--s2); color: var(--text); cursor: pointer; }
+    .display-toggle:hover { border-color: rgba(255,255,255,.2); }
+    .pc-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+    .tag { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 4px; background: var(--s2); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+    .tag.ok   { border-color: rgba(79,255,176,.3); color: var(--accent); }
+    .tag.warn { border-color: rgba(255,183,64,.3);  color: var(--warn); }
+    .tag.bad  { border-color: rgba(255,80,96,.3);   color: var(--bad); }
+    .tag.blue { border-color: rgba(0,207,255,.3);   color: var(--blue); }
+    .sdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .bat-bar-wrap { margin-top: 6px; }
+    .bat-bar-bg { height: 3px; background: var(--s3); border-radius: 2px; overflow: hidden; }
+    .bat-bar-fill { height: 100%; border-radius: 2px; transition: width .5s; }
+    .bat-label { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 3px; display: flex; justify-content: space-between; }
+
+    .log-panel { border-top: 1px solid var(--border); height: 185px; display: flex; flex-direction: column; flex-shrink: 0; }
+    .log-hdr { padding: 8px 16px; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 700; flex-shrink: 0; }
+    #log-entries { overflow-y: auto; flex: 1; }
+    .log-entry { padding: 3px 16px; font-family: var(--mono); font-size: 10px; color: var(--muted); line-height: 1.65; }
+    .log-entry .lt { color: var(--accent); margin-right: 7px; }
+    .log-entry.hi { color: var(--text); }
+    .log-entry.err { color: var(--bad); }
+
+    .map-wrap { position: relative; overflow: hidden; }
+    #map { width: 100%; height: 100%; }
+    .leaflet-container { background: #0d0f14 !important; }
+    .leaflet-tile { filter: brightness(.65) saturate(.4); }
+    .leaflet-popup-content-wrapper { background: var(--s2); border: 1px solid var(--border); color: var(--text); border-radius: 9px; box-shadow: 0 8px 30px rgba(0,0,0,.5); font-family: var(--sans); }
+    .leaflet-popup-tip { background: var(--s2); }
+    .leaflet-control-zoom a { background: var(--s2) !important; color: var(--text) !important; border-color: var(--border) !important; }
+
+    .map-overlay { position: absolute; top: 14px; right: 14px; z-index: 500; width: 240px; }
+    .ov-card { background: rgba(10,12,16,.93); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(14px); }
+    .ov-title { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 700; margin-bottom: 10px; }
+    .ov-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.04); font-size: 12px; }
+    .ov-row:last-child { border-bottom: none; }
+    .ov-lbl { color: var(--muted); font-size: 11px; }
+    .ov-val { font-family: var(--mono); font-size: 11px; text-align: right; max-width: 140px; word-break: break-all; }
+    .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--muted); font-size: 12px; gap: 8px; text-align: center; padding: 20px; }
+    .empty-icon { font-size: 32px; opacity: .35; }
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 3px; }
+    .toast { position: fixed; bottom: 16px; left: 16px; z-index: 9999; background: rgba(10,12,16,.96); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-family: var(--mono); font-size: 11px; color: var(--text); box-shadow: 0 8px 30px rgba(0,0,0,.45); display:none; }
+
+    .list-controls { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+    .list-controls .text-input { font-size: 12px; }
+    .cat-header { display: flex; align-items: center; gap: 7px; padding: 9px 16px 7px; font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); border-bottom: 1px solid var(--border); }
+    .cat-header .cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .tag.cat { font-weight: 600; }
+
+    .modal-backdrop { position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .modal { background: var(--s1); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; width: 340px; max-width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+    .modal-title { font-size: 15px; font-weight: 800; margin-bottom: 14px; }
+    .modal-lbl { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; margin: 10px 0 5px; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-dot"></div>GPS Tracker</div>
+  <div class="hdr-right">
+    <span id="mqtt-pill" class="mqtt-pill off" title="MQTT-status"><span class="mqtt-dot"></span><span id="mqtt-pill-txt">MQTT</span></span>
+    <span id="acct-pill" class="mqtt-pill off admin-only" title="Google-account"><span class="mqtt-dot"></span><span id="acct-txt">Niet ingelogd</span></span>
+    <button class="btn btn-primary admin-only" id="trackBtn">▶ Start tracking</button>
+    <button class="btn btn-primary admin-only" id="googleBtn">🔑 Google verbinden</button>
+    <button class="btn btn-primary admin-only" id="keysBtn" style="display:none">🔐 Sleutels ophalen</button>
+    <button class="btn btn-ghost admin-only" id="logoutBtn" style="display:none">Google uitloggen</button>
+    <div class="settings-wrap admin-only">
+      <button class="btn btn-ghost" id="settingsBtn" title="Instellingen">⚙</button>
+      <div class="settings-pop" id="settingsPop" style="display:none">
+        <label class="modal-lbl" for="apiBase">Backend URL</label>
+        <input id="apiBase" class="text-input" type="text" value="" placeholder="(zelfde server)" />
+        <label class="modal-lbl" for="mqttUrl">MQTT WebSocket URL</label>
+        <input id="mqttUrl" class="text-input" type="text" value="ws://localhost:9001" />
+        <div class="settings-actions">
+          <button class="btn btn-ghost" id="refreshBtn">↻ Ververs</button>
+          <button class="btn btn-ghost" id="demoBtn">Demo</button>
+        </div>
+        <button class="btn btn-ghost" id="tokenLoginBtn" style="margin-top:10px;width:100%">🔑 Inloggen met token</button>
+      </div>
+    </div>
+    <button class="btn btn-ghost" id="adminLoginBtn">🔒 Admin login</button>
+    <button class="btn btn-danger" id="adminLogoutBtn" style="display:none">🔓 Admin uitloggen</button>
+  </div>
+</header>
+
+<div id="ticker">
+  <span id="ticker-msg">Verbinding maken…</span>
+  <span id="ticker-time">—</span>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sb-header">
+      Pucks
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="display-toggle" id="displayToggle" title="Wissel weergave tussen adres en coördinaten voor alle pucks">🏠 Adres</button>
+        <span id="puck-count">0</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section admin-only">
+      <div class="section-title">Puck toevoegen via Google Find My</div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="scanBtn">⟳ Scan Google Find My</button>
+        <button class="btn btn-ghost" id="addAllBtn" style="display:none">+ Alle nieuwe</button>
+        <button class="btn btn-ghost" id="clearScanBtn" style="display:none">✕ Wissen</button>
+      </div>
+      <div class="disc-status" id="disc-status"></div>
+      <div class="discover-list" id="discover-list"></div>
+      <div class="hint">Zoekt automatisch naar pucks op je Google Find My-account en laat je kiezen welke je toevoegt aan <span style="color:var(--accent)">devices.json</span>.</div>
+    </div>
+
+    <div class="list-controls">
+      <input id="puckSearch" class="text-input" type="text" placeholder="🔍 Zoek puck (naam, categorie, id)…" />
+      <select id="categoryFilter" class="text-input">
+        <option value="">Alle categorieën</option>
+      </select>
+    </div>
+
+    <div class="puck-list" id="puck-list">
+      <div class="empty"><span class="empty-icon">📡</span>Geen pucks.<br>Voeg er hierboven één toe.</div>
+    </div>
+
+    <div class="log-panel">
+      <div class="log-hdr">Live log</div>
+      <div id="log-entries"></div>
+    </div>
+  </div>
+
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="map-overlay">
+      <div class="ov-card" id="detail-card" style="display:none">
+        <div class="ov-title" id="ov-name">—</div>
+        <div class="ov-row"><span class="ov-lbl" id="ov-addr-lbl">Adres</span><span class="ov-val addr-toggle" id="ov-addr">—</span></div>
+        <div class="ov-row"><span class="ov-lbl">Tijdstip</span><span class="ov-val" id="ov-ts">—</span></div>
+        <div class="ov-row"><span class="ov-lbl">Ontvangen</span><span class="ov-val" id="ov-recv">—</span></div>
+        <div class="ov-row"><span class="ov-lbl">Batterij</span><span class="ov-val" id="ov-bat">—</span></div>
+        <div class="ov-row"><span class="ov-lbl">Pings</span><span class="ov-val" id="ov-pings">—</span></div>
+        <div class="ov-row"><span class="ov-lbl">Status</span><span class="ov-val" id="ov-status">—</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-backdrop" id="tokenModal" style="display:none">
+  <div class="modal" style="width:440px">
+    <div class="modal-title">Inloggen met Google-token</div>
+    <ol style="font-size:12px;color:var(--muted);line-height:1.7;padding-left:18px;margin-bottom:6px">
+      <li>Open in je eigen browser <a href="https://accounts.google.com/EmbeddedSetup" target="_blank" style="color:var(--accent)">accounts.google.com/EmbeddedSetup</a> en log in met het gewenste account.</li>
+      <li>Druk <b>F12</b> → tabblad <b>Application</b> (of "Toepassing") → <b>Cookies</b> → <code>https://accounts.google.com</code>.</li>
+      <li>Zoek de cookie <b>oauth_token</b> en kopieer de <b>waarde</b> (begint met <code>oauth2_4/</code>).</li>
+      <li>Plak die hieronder en klik Opslaan.</li>
+    </ol>
+    <label class="modal-lbl" for="tk-value">oauth_token</label>
+    <input id="tk-value" class="text-input" type="text" placeholder="oauth2_4/0Ad..." />
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="tk-cancel">Annuleren</button>
+      <button class="btn btn-primary" id="tk-save">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="puckModal" style="display:none">
+  <div class="modal">
+    <div class="modal-title" id="pm-title">Puck toevoegen</div>
+    <label class="modal-lbl" for="pm-name">Naam</label>
+    <input id="pm-name" class="text-input" type="text" placeholder="bv. Auto sleutels" />
+    <label class="modal-lbl" for="pm-category">Categorie</label>
+    <input id="pm-category" class="text-input" type="text" list="categoryList" placeholder="bv. Voertuigen, Sleutels, Koffers…" />
+    <datalist id="categoryList"></datalist>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="pm-cancel">Annuleren</button>
+      <button class="btn btn-primary" id="pm-save">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PINGS_FULL_BATTERY = 250000;
+
+function estimateBattery(realBat, pingCount) {
+  if (realBat != null) return { pct: realBat, source: 'echt' };
+  if (!pingCount || pingCount === 0) return { pct: null, source: 'onbekend' };
+  const pct = Math.max(0, Math.round(100 - (pingCount / PINGS_FULL_BATTERY) * 100));
+  return { pct, source: 'geschat' };
+}
+
+function batColour(pct) {
+  if (pct == null) return 'var(--muted)';
+  if (pct > 50) return 'var(--accent)';
+  if (pct > 20) return 'var(--warn)';
+  return 'var(--bad)';
+}
+
+const S = {
+  pucks: {},
+  pingCounts: {},
+  markers: {},
+  markerCol: {},
+  circles: {},
+  activePuck: null,
+  prevReceived: {},
+  ignored: new Set(),
+  knownDevices: [],
+};
+
+// ─── Adres-weergave (reverse-geocoding via backend, klik = coördinaten) ───────
+const ADDR = {};                 // coord-key -> adres (string) of null (mislukt)
+const ADDR_PENDING = new Set();
+
+function ckey(lat, lon) {
+  const a = Number(lat), b = Number(lon);
+  return (isNaN(a) || isNaN(b)) ? null : a.toFixed(4) + ',' + b.toFixed(4);
+}
+function coordText(lat, lon) {
+  return `${Number(lat).toFixed(5)}, ${Number(lon).toFixed(5)}`;
+}
+function addrLabel(lat, lon) {
+  const k = ckey(lat, lon);
+  if (!k) return '—';
+  return ADDR[k] || coordText(lat, lon);   // val terug op coördinaten tot het adres geladen is
+}
+async function fetchAddress(lat, lon) {
+  const k = ckey(lat, lon);
+  if (!k || k in ADDR || ADDR_PENDING.has(k)) return;
+  ADDR_PENDING.add(k);
+  try {
+    const base = apiBaseEl.value.replace(/\/$/, '');
+    const res = await fetch(`${base}/api/geocode?lat=${lat}&lon=${lon}`, { cache: 'no-store' });
+    if (res.ok) { const b = await res.json(); ADDR[k] = b.address || null; }
+  } catch (_) {}
+  finally { ADDR_PENDING.delete(k); refreshAddressEls(); }
+}
+// Globale weergavemodus: één toggle wisselt ALLE pucks tegelijk.
+let displayMode = localStorage.getItem('displayMode') || 'address';  // 'address' | 'coords'
+
+function valueFor(lat, lon) {
+  if (lat == null || lon == null) return '—';
+  return displayMode === 'coords' ? coordText(lat, lon) : addrLabel(lat, lon);
+}
+function refreshAddressEls() {
+  document.querySelectorAll('.addr-toggle').forEach(el => {
+    el.textContent = valueFor(el.dataset.lat, el.dataset.lon);
+  });
+}
+function applyDisplayMode() {
+  const btn = document.getElementById('displayToggle');
+  if (btn) btn.textContent = displayMode === 'coords' ? '📍 Coördinaten' : '🏠 Adres';
+  const lbl = document.getElementById('ov-addr-lbl');
+  if (lbl) lbl.textContent = displayMode === 'coords' ? 'Coördinaten' : 'Adres';
+  refreshAddressEls();
+}
+function toggleDisplayMode() {
+  displayMode = (displayMode === 'coords') ? 'address' : 'coords';
+  localStorage.setItem('displayMode', displayMode);
+  applyDisplayMode();
+}
+
+const map = L.map('map', { zoomControl: true }).setView([51.1732, 4.3714], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '© OpenStreetMap'
+}).addTo(map);
+
+window.addEventListener('resize', () => map.invalidateSize());
+setTimeout(() => map.invalidateSize(), 300);
+
+const COLOURS = ['#4fffb0','#00cfff','#ffb740','#ff5060','#bf7fff','#ff9f7a','#7adfff','#f0e040'];
+let cIdx = 0;
+const puckCol = {};
+function getCol(id) {
+  if (!puckCol[id]) { puckCol[id] = COLOURS[cIdx % COLOURS.length]; cIdx++; }
+  return puckCol[id];
+}
+// Stabiele kleur per categorie (zelfde categorie => zelfde kleur op kaart + lijst).
+function categoryColor(cat) {
+  if (!cat) return null;
+  let h = 0;
+  for (let i = 0; i < cat.length; i++) h = (h * 31 + cat.charCodeAt(i)) >>> 0;
+  return COLOURS[h % COLOURS.length];
+}
+// Kleur van een puck: categoriekleur indien categorie, anders per-puck kleur.
+function puckColor(p) {
+  return (p && p.category && categoryColor(p.category)) || getCol(p.device_id);
+}
+
+const apiBaseEl = document.getElementById('apiBase');
+const tickerMsg = document.getElementById('ticker-msg');
+const tickerTime = document.getElementById('ticker-time');
+const puckList = document.getElementById('puck-list');
+const puckCount = document.getElementById('puck-count');
+const logEntries = document.getElementById('log-entries');
+const detailCard = document.getElementById('detail-card');
+const toast = document.getElementById('toast');
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toast.style.display = 'none', 2200);
+}
+
+function log(msg, cls = '') {
+  const t = new Date().toLocaleTimeString('nl-BE', { hour12: false });
+  const el = document.createElement('div');
+  el.className = 'log-entry' + (cls ? ' ' + cls : '');
+  el.innerHTML = `<span class="lt">${t}</span>${msg}`;
+  logEntries.prepend(el);
+  while (logEntries.children.length > 150) logEntries.removeChild(logEntries.lastChild);
+}
+
+function makeIcon(colour) {
+  return L.divIcon({
+    className: '',
+    html: `<svg width="26" height="34" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg">
+      <path d="M13 0C5.82 0 0 5.82 0 13c0 9.75 13 21 13 21s13-11.25 13-21C26 5.82 20.18 0 13 0z" fill="${colour}" fill-opacity=".88"/>
+      <circle cx="13" cy="13" r="4.5" fill="#000" fill-opacity=".45"/>
+    </svg>`,
+    iconSize: [26, 34], iconAnchor: [13, 34], popupAnchor: [0, -36],
+  });
+}
+
+function upsertMarker(p) {
+  const id = p.device_id;
+  const realLat = Number(p.latitude);
+  const realLon = Number(p.longitude);
+  if (isNaN(realLat) || isNaN(realLon)) return;
+  // Gespreide weergavecoördinaten zodat pucks op exact dezelfde plek
+  // elkaar niet verbergen (zie spreadOverlaps).
+  const lat = Number(p._dlat ?? realLat);
+  const lon = Number(p._dlon ?? realLon);
+
+  const col = puckColor(p);
+  const name = p.name || id;
+  const pop = `<b>${name}</b><br><code style="font-size:11px">${realLat.toFixed(5)}, ${realLon.toFixed(5)}</code><br><span style="font-size:11px;opacity:.7">${p.timestamp || ''}</span>`;
+
+  if (S.markers[id]) {
+    S.markers[id].setLatLng([lat, lon]);
+    S.markers[id].setPopupContent(pop);
+    S.circles[id].setLatLng([lat, lon]);
+    if (S.markerCol[id] !== col) {            // categorie/kleur veranderd
+      S.markers[id].setIcon(makeIcon(col));
+      S.circles[id].setStyle({ color: col, fillColor: col });
+      S.markerCol[id] = col;
+    }
+  } else {
+    const marker = L.marker([lat, lon], { icon: makeIcon(col) }).addTo(map).bindPopup(pop);
+    marker.on('click', () => selectPuck(id));
+    S.markers[id] = marker;
+    S.circles[id] = L.circle([lat, lon], {
+      radius: 55, color: col, fillColor: col, fillOpacity: .07, weight: 1,
+    }).addTo(map);
+    S.markerCol[id] = col;
+  }
+}
+
+function removeMarker(id) {
+  if (S.markers[id]) { map.removeLayer(S.markers[id]); delete S.markers[id]; }
+  if (S.circles[id]) { map.removeLayer(S.circles[id]); delete S.circles[id]; }
+}
+
+function renderCard(p) {
+  const id = p.device_id;
+  const name = p.name || id;
+  const col = puckColor(p);
+  const pings = S.pingCounts[id] || 0;
+  const bat = estimateBattery(p.battery, pings);
+  const moved = S.prevReceived[id] && S.prevReceived[id] !== p.received;
+
+  let el = document.getElementById('pcard-' + id);
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'puck-card';
+    el.id = 'pcard-' + id;
+    el.onclick = (e) => {
+      const target = e.target;
+      if (target.classList.contains('pc-del') || target.classList.contains('pc-edit')) return;
+      selectPuck(id);
+    };
+    puckList.appendChild(el);
+    document.querySelector('.empty')?.remove();
+  }
+  if (S.activePuck === id) el.classList.add('active'); else el.classList.remove('active');
+
+  const batPct = bat.pct;
+  const batFill = batPct != null ? `${batPct}%` : '0%';
+  const batTxt = batPct != null ? `${batPct}% (${bat.source})` : 'onbekend';
+  const bCol = batColour(batPct);
+  const movedTag = moved ? `<span class="tag ok">↑ bewogen</span>` : `<span class="tag">stilstaand</span>`;
+  const batTagCls = batPct == null ? '' : batPct > 50 ? 'ok' : batPct > 20 ? 'warn' : 'bad';
+
+  el.innerHTML = `
+    <div class="pc-top">
+      <div class="pc-name">
+        <span class="sdot" style="background:${col};box-shadow:0 0 6px ${col}"></span>
+        ${name}
+      </div>
+      <div class="admin-only">
+        <button class="pc-edit" title="Hernoem puck" onclick="renamePuckPrompt('${id}')">✎</button>
+        <button class="pc-del" title="Verwijder puck" onclick="deletePuck('${id}')">✕</button>
+      </div>
+    </div>
+    <div class="pc-id">${id}</div>
+    <div class="pc-coords addr-toggle" data-lat="${p.latitude}" data-lon="${p.longitude}">${valueFor(p.latitude, p.longitude)}</div>
+    <div class="pc-tags">
+      ${p.category ? `<span class="tag cat">🏷 ${p.category}</span>` : ''}
+      <span class="tag blue">${(p.timestamp || '—').slice(0,16)}</span>
+      ${movedTag}
+      <span class="tag ${batTagCls}">🔋 ${batTxt}</span>
+    </div>
+    <div class="bat-bar-wrap">
+      <div class="bat-bar-bg">
+        <div class="bat-bar-fill" style="width:${batFill};background:${bCol}"></div>
+      </div>
+      <div class="bat-label"><span>${pings} pings</span><span>${batTxt}</span></div>
+    </div>
+  `;
+}
+
+function showDetail(p) {
+  const pings = S.pingCounts[p.device_id] || 0;
+  const bat = estimateBattery(p.battery, pings);
+  detailCard.style.display = 'block';
+  document.getElementById('ov-name').textContent = p.name || p.device_id;
+  const av = document.getElementById('ov-addr');
+  av.dataset.lat = p.latitude; av.dataset.lon = p.longitude;
+  av.textContent = valueFor(p.latitude, p.longitude);
+  if (p.latitude != null && p.longitude != null) fetchAddress(p.latitude, p.longitude);
+  document.getElementById('ov-ts').textContent = (p.timestamp || '—').slice(0,16);
+  document.getElementById('ov-recv').textContent = (p.received || '—').slice(0,16);
+  document.getElementById('ov-bat').textContent = bat.pct != null ? `${bat.pct}% (${bat.source})` : '—';
+  document.getElementById('ov-pings').textContent = pings;
+  document.getElementById('ov-status').textContent = p.status ?? '—';
+}
+
+function selectPuck(id) {
+  S.activePuck = id;
+  document.querySelectorAll('.puck-card').forEach(c => c.classList.remove('active'));
+  document.getElementById('pcard-' + id)?.classList.add('active');
+  const p = S.pucks[id];
+  if (p) {
+    showDetail(p);
+    const lat = Number(p._dlat ?? p.latitude), lon = Number(p._dlon ?? p.longitude);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      map.flyTo([lat, lon], Math.max(map.getZoom(), 16), { duration: 0.6 });
+      setTimeout(() => S.markers[id]?.openPopup(), 650);
+    }
+  }
+}
+
+function deletePuck(id) {
+  const name = S.pucks[id]?.name || id;
+  if (!confirm(`Puck "${name}" volledig verwijderen?\n\nDit wist de puck uit devices.json én alle locatiedata (laatste positie + volledige geschiedenis). Dit kan niet ongedaan worden gemaakt.`)) return;
+  fetch(`${apiBaseEl.value.replace(/\/$/, '')}/api/devices/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() })
+    .then(async r => {
+      if (handle401(r)) return;
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.detail || `HTTP ${r.status}`);
+      S.ignored.add(id);
+      removeMarker(id);
+      delete S.pucks[id];
+      delete S.pingCounts[id];
+      delete S.prevReceived[id];
+      document.getElementById('pcard-' + id)?.remove();
+      const hist = body.purged?.history || 0;
+      showToast(`${name} volledig verwijderd${hist ? ` (${hist} historiepunten gewist)` : ''}`);
+      log(`${name} volledig verwijderd${hist ? ` — ${hist} historiepunten gewist` : ''}`, 'hi');
+      refresh();
+    })
+    .catch(err => showToast(`Fout: ${err.message}`));
+}
+
+// Bewerken (naam + categorie) via de modal.
+function renamePuckPrompt(id) {
+  const p = S.pucks[id] || {};
+  openPuckModal({
+    title: 'Puck bewerken',
+    name: p.name || '',
+    category: p.category || '',
+    onSave: async (name, category) => {
+      const base = apiBaseEl.value.replace(/\/$/, '');
+      try {
+        const res = await fetch(`${base}/api/devices/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ name, device_id: id, category }),
+        });
+        if (handle401(res)) return false;
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        showToast('Opgeslagen');
+        refresh();
+        return true;
+      } catch (err) { showToast(`Fout: ${err.message}`); return false; }
+    },
+  });
+}
+
+async function fetchPingCounts() {
+  try {
+    const base = apiBaseEl.value.replace(/\/$/, '');
+    const res = await fetch(`${base}/api/history`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const rows = await res.json();
+    const counts = {};
+    rows.forEach(r => {
+      if (r.device_id) counts[r.device_id] = (counts[r.device_id] || 0) + 1;
+    });
+    Object.assign(S.pingCounts, counts);
+  } catch (_) {}
+}
+
+function renderEmptyIfNeeded() {
+  if (Object.keys(S.pucks).length === 0) {
+    puckList.innerHTML = '<div class="empty"><span class="empty-icon">📡</span>Geen pucks.<br>Voeg er hierboven één toe.</div>';
+  }
+}
+
+// Pucks die exact (of bijna) op dezelfde plek staan, in een kleine cirkel
+// uit elkaar trekken zodat elke marker zichtbaar én klikbaar blijft.
+function spreadOverlaps(list) {
+  const groups = {};
+  list.forEach(p => {
+    const la = Number(p.latitude), lo = Number(p.longitude);
+    if (isNaN(la) || isNaN(lo)) { p._dlat = p.latitude; p._dlon = p.longitude; return; }
+    const key = la.toFixed(5) + ',' + lo.toFixed(5); // ~1 m raster
+    (groups[key] = groups[key] || []).push(p);
+  });
+  Object.values(groups).forEach(g => {
+    if (g.length === 1) {
+      g[0]._dlat = Number(g[0].latitude);
+      g[0]._dlon = Number(g[0].longitude);
+      return;
+    }
+    const R = 0.00014; // ~15 m spreiding
+    g.forEach((p, i) => {
+      const la = Number(p.latitude), lo = Number(p.longitude);
+      const ang = (2 * Math.PI * i) / g.length;
+      p._dlat = la + R * Math.cos(ang);
+      p._dlon = lo + R * Math.sin(ang) / Math.cos(la * Math.PI / 180);
+    });
+  });
+}
+
+function applyAll(allData, devices) {
+  const visibleDevices = devices.filter(d => !S.ignored.has(d.device_id));
+  puckCount.textContent = visibleDevices.length;
+  S.knownDevices = visibleDevices;
+
+  const merged = {};
+  visibleDevices.forEach(d => {
+    const live = allData[d.device_id] || {};
+    merged[d.device_id] = {
+      device_id: d.device_id,
+      name: d.name || live.name || d.device_id,
+      category: d.category || '',
+      latitude: live.latitude,
+      longitude: live.longitude,
+      timestamp: live.timestamp,
+      received: live.received,
+      battery: live.battery,
+      status: live.status,
+    };
+  });
+
+  Object.keys(S.pucks).forEach(id => {
+    if (!merged[id]) {
+      removeMarker(id);
+      document.getElementById('pcard-' + id)?.remove();
+      delete S.pucks[id];
+      delete S.pingCounts[id];
+      delete S.prevReceived[id];
+    }
+  });
+
+  spreadOverlaps(Object.values(merged));
+
+  Object.keys(merged).forEach(id => {
+    const p = merged[id];
+    const prev = S.pucks[id];
+    const isNew = !prev;
+    const movedTime = prev && prev.received !== p.received;
+    const movedCoords = prev && (prev.latitude !== p.latitude || prev.longitude !== p.longitude);
+    const moved = movedTime || movedCoords;
+
+    S.pucks[id] = p;
+    if (p.timestamp || p.received) upsertMarker(p);
+    renderCard(p);
+    if (p.latitude != null && p.longitude != null) fetchAddress(p.latitude, p.longitude);
+
+    if (isNew) log(`${p.name || id} verbonden`, 'hi');
+    else if (moved) log(`${p.name || id} → ${p.latitude}, ${p.longitude}`, 'hi');
+    else log(`${p.name || id} — geen beweging`);
+
+    S.prevReceived[id] = p.received;
+  });
+
+  if (S.activePuck && merged[S.activePuck]) {
+    showDetail(merged[S.activePuck]);
+  } else if (Object.keys(merged).length > 0 && !S.activePuck) {
+    selectPuck(Object.keys(merged)[0]);
+  } else {
+    detailCard.style.display = 'none';
+  }
+
+  renderEmptyIfNeeded();
+  rebuildCategoryFilter();
+  applyListFilter();
+
+  const now = new Date().toLocaleTimeString('nl-BE', { hour12: false });
+  tickerTime.textContent = `sync ${now}`;
+  tickerMsg.textContent = `${visibleDevices.length} puck(s) actief`;
+  tickerMsg.style.color = 'var(--accent)';
+}
+
+async function fetchAll() {
+  const base = apiBaseEl.value.replace(/\/$/, '');
+  const [devicesRes, allRes] = await Promise.all([
+    fetch(`${base}/api/devices`, { cache: 'no-store' }),
+    fetch(`${base}/api/all`, { cache: 'no-store' })
+  ]);
+  const devices = devicesRes.ok ? await devicesRes.json() : [];
+  const allData = allRes.ok ? await allRes.json() : {};
+  return { devices, allData };
+}
+
+async function refresh() {
+  try {
+    const { devices, allData } = await fetchAll();
+    S.allData = allData;                 // cache zodat MQTT-updates hierop mergen
+    S.lastDevices = devices;
+    applyAll(allData, devices);
+  } catch (err) {
+    tickerMsg.textContent = 'Backend niet bereikbaar';
+    tickerMsg.style.color = 'var(--bad)';
+    log(`Fout: ${err.message}`, 'err');
+  }
+}
+
+// ─── Modal (toevoegen/bewerken: naam + categorie) ────────────────────────────
+const puckModal = document.getElementById('puckModal');
+const pmTitle = document.getElementById('pm-title');
+const pmName = document.getElementById('pm-name');
+const pmCategory = document.getElementById('pm-category');
+const categoryList = document.getElementById('categoryList');
+let pmOnSave = null;
+
+function knownCategories() {
+  const set = new Set();
+  Object.values(S.pucks).forEach(p => { if (p.category) set.add(p.category); });
+  (S.knownDevices || []).forEach(d => { if (d.category) set.add(d.category); });
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+function openPuckModal(opts) {
+  pmTitle.textContent = opts.title || 'Puck';
+  pmName.value = opts.name || '';
+  pmCategory.value = opts.category || '';
+  categoryList.innerHTML = knownCategories().map(c => `<option value="${c}"></option>`).join('');
+  pmOnSave = opts.onSave || null;
+  puckModal.style.display = 'flex';
+  setTimeout(() => pmName.focus(), 50);
+}
+function closePuckModal() { puckModal.style.display = 'none'; pmOnSave = null; }
+
+async function pmSave() {
+  const name = pmName.value.trim();
+  const category = pmCategory.value.trim();
+  if (!name) return showToast('Naam mag niet leeg zijn');
+  if (pmOnSave) { const ok = await pmOnSave(name, category); if (ok === false) return; }
+  closePuckModal();
+}
+
+document.getElementById('pm-save').addEventListener('click', pmSave);
+document.getElementById('pm-cancel').addEventListener('click', closePuckModal);
+puckModal.addEventListener('click', e => { if (e.target === puckModal) closePuckModal(); });
+pmName.addEventListener('keydown', e => { if (e.key === 'Enter') pmSave(); });
+pmCategory.addEventListener('keydown', e => { if (e.key === 'Enter') pmSave(); });
+
+// ─── Zoeken + filteren/sorteren op categorie ─────────────────────────────────
+const puckSearch = document.getElementById('puckSearch');
+const categoryFilter = document.getElementById('categoryFilter');
+
+function rebuildCategoryFilter() {
+  const cats = knownCategories();
+  const cur = categoryFilter.value;
+  categoryFilter.innerHTML = '<option value="">Alle categorieën</option>'
+    + cats.map(c => `<option value="${c}">${c}</option>`).join('')
+    + '<option value="__none__">(zonder categorie)</option>';
+  categoryFilter.value = cur;
+}
+
+function applyListFilter() {
+  const term = (puckSearch.value || '').toLowerCase().trim();
+  const cat = categoryFilter.value;
+  const cards = Array.from(puckList.querySelectorAll('.puck-card'));
+
+  // 1) Zichtbaarheid (zoeken + categoriefilter) — altijd, is goedkoop.
+  cards.forEach(el => {
+    const id = el.id.replace('pcard-', '');
+    const p = S.pucks[id] || {};
+    const cName = p.category || '';
+    let show = true;
+    if (term) show = `${p.name || ''} ${cName} ${id}`.toLowerCase().includes(term);
+    if (show && cat) show = (cat === '__none__') ? !cName : (cName === cat);
+    el.style.display = show ? '' : 'none';
+  });
+
+  // 2) Sorteren op categorie (lege achteraan), dan naam.
+  cards.sort((a, b) => {
+    const pa = S.pucks[a.id.replace('pcard-', '')] || {};
+    const pb = S.pucks[b.id.replace('pcard-', '')] || {};
+    const ca = pa.category || '￿', cb = pb.category || '￿';
+    if (ca !== cb) return ca.localeCompare(cb);
+    return (pa.name || '').localeCompare(pb.name || '');
+  });
+
+  // 3) Alleen herschikken + koppen herbouwen als er écht iets veranderd is
+  //    (voorkomt flikkeren/scroll-sprongen bij elke 10s-verversing).
+  const sig = cards.map(el => {
+    const p = S.pucks[el.id.replace('pcard-', '')] || {};
+    return `${el.id}:${p.category || ''}:${el.style.display === 'none' ? 0 : 1}`;
+  }).join('|');
+  if (sig === applyListFilter._sig) return;
+  applyListFilter._sig = sig;
+
+  cards.forEach(el => puckList.appendChild(el));
+  puckList.querySelectorAll('.cat-header').forEach(h => h.remove());
+  let lastCat = null;
+  cards.filter(el => el.style.display !== 'none').forEach(el => {
+    const p = S.pucks[el.id.replace('pcard-', '')] || {};
+    const c = p.category || '';
+    if (c !== lastCat) {
+      const hdr = document.createElement('div');
+      hdr.className = 'cat-header';
+      const col = c ? categoryColor(c) : 'var(--muted)';
+      hdr.innerHTML = `<span class="cat-dot" style="background:${col}"></span>${c || 'Zonder categorie'}`;
+      puckList.insertBefore(hdr, el);
+      lastCat = c;
+    }
+  });
+}
+
+puckSearch.addEventListener('input', applyListFilter);
+categoryFilter.addEventListener('change', applyListFilter);
+
+// ─── Admin-login (bedienen vs enkel bekijken) ────────────────────────────────
+const adminLoginBtn = document.getElementById('adminLoginBtn');
+const adminLogoutBtn = document.getElementById('adminLogoutBtn');
+let adminToken = localStorage.getItem('adminToken') || '';
+let isAdmin = false;
+
+// Voeg het admin-token toe aan wijzig-verzoeken.
+function authHeaders(extra) {
+  const h = Object.assign({}, extra || {});
+  if (adminToken) h['Authorization'] = 'Bearer ' + adminToken;
+  return h;
+}
+
+// Roep dit aan na een wijzig-fetch; geeft true terug als de sessie verlopen is.
+function handle401(res) {
+  if (res && res.status === 401) {
+    clearAdmin();
+    showToast('Admin-login vereist of verlopen');
+    return true;
+  }
+  return false;
+}
+
+function setAdminUI(on) {
+  isAdmin = on;
+  document.body.classList.toggle('admin', on);
+  adminLoginBtn.style.display = on ? 'none' : '';
+  adminLogoutBtn.style.display = on ? '' : 'none';
+}
+
+function clearAdmin() {
+  adminToken = '';
+  localStorage.removeItem('adminToken');
+  setAdminUI(false);
+}
+
+async function adminLogin() {
+  const pw = prompt('Admin-wachtwoord:');
+  if (pw == null || pw === '') return;
+  const base = apiBaseEl.value.replace(/\/$/, '');
+  try {
+    const res = await fetch(`${base}/api/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw }),
+    });
+    if (res.status === 401) return showToast('Verkeerd wachtwoord');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json();
+    adminToken = body.token;
+    localStorage.setItem('adminToken', adminToken);
+    setAdminUI(true);
+    showToast('Ingelogd als admin');
+    fetchAuthStatus();
+  } catch (err) {
+    showToast(`Fout: ${err.message}`);
+  }
+}
+
+async function adminLogout() {
+  const base = apiBaseEl.value.replace(/\/$/, '');
+  try { await fetch(`${base}/api/admin/logout`, { method: 'POST', headers: authHeaders() }); } catch (_) {}
+  clearAdmin();
+  showToast('Admin uitgelogd');
+}
+
+async function fetchAdminStatus() {
+  try {
+    const base = apiBaseEl.value.replace(/\/$/, '');
+    const res = await fetch(`${base}/api/admin/status`, { headers: authHeaders(), cache: 'no-store' });
+    if (res.ok) {
+      const st = await res.json();
+      setAdminUI(!!st.is_admin);
+      if (!st.is_admin && adminToken) clearAdmin();  // token verlopen
+    }
+  } catch (_) {}
+}
+
+adminLoginBtn.addEventListener('click', adminLogin);
+adminLogoutBtn.addEventListener('click', adminLogout);
+
+// ─── Google-account login ────────────────────────────────────────────────────
+const acctPill = document.getElementById('acct-pill');
+const acctTxt = document.getElementById('acct-txt');
+const googleBtn = document.getElementById('googleBtn');
+const keysBtn = document.getElementById('keysBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+let authLoggedIn = false;
+let lastKeysMsg = '';
+
+function applyAuthStatus(st) {
+  authLoggedIn = !!st.logged_in;
+  if (st.logged_in) {
+    acctPill.className = 'mqtt-pill on';
+    acctTxt.textContent = st.username || 'Ingelogd';
+    googleBtn.style.display = 'none';
+    logoutBtn.style.display = '';
+    // Sleutel-knop: enkel tonen als de E2EE-sleutels nog ontbreken.
+    if (!st.has_keys) {
+      keysBtn.style.display = '';
+      keysBtn.disabled = !!st.keys_busy;
+      keysBtn.textContent = st.keys_busy ? 'Sleutels ophalen…' : '🔐 Sleutels ophalen';
+    } else {
+      keysBtn.style.display = 'none';
+    }
+  } else {
+    acctPill.className = 'mqtt-pill ' + (st.busy ? 'connecting' : 'off');
+    acctTxt.textContent = st.busy ? (st.message || 'Bezig met inloggen…') : 'Niet ingelogd';
+    googleBtn.style.display = '';
+    googleBtn.disabled = !!st.busy;
+    googleBtn.textContent = st.busy ? 'Bezig…' : '🔑 Google verbinden';
+    keysBtn.style.display = 'none';
+    logoutBtn.style.display = 'none';
+  }
+  if (st.message && (st.state === 'error' || st.state === 'waiting' || st.state === 'ok')) {
+    log(`Google: ${st.message}`, st.state === 'error' ? 'err' : 'hi');
+  }
+  if (st.keys_message && st.keys_message !== lastKeysMsg &&
+      ['error', 'waiting', 'ok'].includes(st.keys_state)) {
+    lastKeysMsg = st.keys_message;
+    log(`Sleutels: ${st.keys_message}`, st.keys_state === 'error' ? 'err' : 'hi');
+  }
+}
+
+async function retrieveKeys() {
+  const base = apiBaseEl.value.replace(/\/$/, '');
+  showToast('Venster opent — meld je aan en bevestig (evt. telefoon-pincode)');
+  try {
+    const res = await fetch(`${base}/api/auth/keys`, { method: 'POST', headers: authHeaders() });
+    const body = await res.json().catch(() => ({}));
+    if (handle401(res)) return;
+    if (body.status) applyAuthStatus(body.status);
+  } catch (err) {
+    showToast(`Fout: ${err.message}`);
+  }
+}
+
+async function fetchAuthStatus() {
+  try {
+    const base = apiBaseEl.value.replace(/\/$/, '');
+    const res = await fetch(`${base}/api/auth/status`, { cache: 'no-store', headers: authHeaders() });
+    if (res.ok) applyAuthStatus(await res.json());
+  } catch (_) {}
+}
+
+async function connectGoogle() {
+  const base = apiBaseEl.value.replace(/\/$/, '');
+  showToast('Chrome opent — log in met je Google-account');
+  try {
+    const res = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: authHeaders() });
+    if (handle401(res)) return;
+    const body = await res.json().catch(() => ({}));
+    if (body.status) applyAuthStatus(body.status);
+  } catch (err) {
+    showToast(`Fout: ${err.message}`);
+  }
+}
+
+async function logoutGoogle() {
+  if (!confirm('Uitloggen en de Google-tokens wissen? Tracking stopt en je kan een ander account verbinden.')) return;
+  const base = apiBaseEl.value.replace(/\/$/, '');
+  try {
+    const res = await fetch(`${base}/api/auth/logout`, { method: 'POST', headers: authHeaders() });
+    if (handle401(res)) return;
+    const body = await res.json().catch(() => ({}));
+    if (body.status) applyAuthStatus(body.status);
+    showToast('Uitgelogd');
+  } catch (err) {
+    showToast(`Fout: ${err.message}`);
+  }
+}
+
+googleBtn.addEventListener('click', connectGoogle);
+keysBtn.addEventListener('click', retrieveKeys);
+logoutBtn.addEventListener('click', logoutGoogle);
+
+// Inloggen met handmatig geplakt token (betrouwbaar alternatief voor de browser-login).
+const tokenModal = document.getElementById('tokenModal');
+function openTokenModal() {
+  document.getElementById('tk-value').value = '';
+  tokenModal.style.display = 'flex';
+  const sp = document.getElementById('settingsPop');
+  if (sp) sp.style.display = 'none';
+  setTimeout(() => document.getElementById('tk-value').focus(), 50);
+}
+function closeTokenModal() { tokenModal.style.display = 'none'; }
+async function saveToken() {
+  const t = document.getElementById('tk-value').value.trim();
+  if (!t) return showToast('Plak eerst een token');
+  const base = apiBaseEl.value.replace(/\/$/, '');
+  try {
+    const res = await fetch(`${base}/api/auth/token`, {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ oauth_token: t }),
+    });
+    if (handle401(res)) return;
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
+    if (body.status) applyAuthStatus(body.status);
+    showToast('Ingelogd via token');
+    closeTokenModal();
+  } catch (err) { showToast(`Fout: ${err.message}`); }
+}
+document.getElementById('tokenLoginBtn').addEventListener('click', openTokenModal);
+document.getElementById('tk-save').addEventListener('click', saveToken);
+document.getElementById('tk-cancel').addEventListener('click', closeTokenModal);
+tokenModal.addEventListener('click', e => { if (e.target === tokenModal) closeTokenModal(); });
+
+// ─── MQTT live updates (rechtstreeks op Mosquitto via WebSocket) ──────────────
+const mqttUrlEl = document.getElementById('mqttUrl');
+const mqttPill = document.getElementById('mqtt-pill');
+const mqttPillTxt = document.getElementById('mqtt-pill-txt');
+const MQTT_TOPIC = 'gpsTracker/pucks/+/location';
+let mqttClient = null;
+
+function setMqttStatus(state) {
+  mqttPill.className = 'mqtt-pill ' + state;
+  mqttPillTxt.textContent =
+    state === 'on' ? 'MQTT live' : state === 'connecting' ? 'MQTT…' : 'MQTT uit';
+}
+
+// Eén MQTT-bericht verwerken: in de cache zetten en de kaart bijwerken.
+function ingestLive(p) {
+  if (!p || !p.device_id || S.ignored.has(p.device_id)) return;
+  S.allData = S.allData || {};
+  S.allData[p.device_id] = p;
+  const known = (S.lastDevices && S.lastDevices.length)
+    ? S.lastDevices
+    : Object.values(S.allData).map(x => ({ device_id: x.device_id, name: x.name }));
+  applyAll(S.allData, known);
+  tickerMsg.textContent = 'MQTT live';
+  tickerMsg.style.color = 'var(--accent)';
+}
+
+function connectMqtt() {
+  if (typeof mqtt === 'undefined') { setMqttStatus('off'); return; }
+  const url = mqttUrlEl.value.trim();
+  if (!url) { setMqttStatus('off'); return; }
+  try { if (mqttClient) { mqttClient.end(true); } } catch (_) {}
+  mqttClient = null;
+  setMqttStatus('connecting');
+  const client = mqtt.connect(url, { reconnectPeriod: 4000, connectTimeout: 8000 });
+  mqttClient = client;
+
+  client.on('connect', () => {
+    setMqttStatus('on');
+    client.subscribe(MQTT_TOPIC, err => {
+      if (err) log(`MQTT subscribe fout: ${err.message}`, 'err');
+      else log(`MQTT verbonden: ${url}`, 'hi');
+    });
+  });
+  client.on('reconnect', () => setMqttStatus('connecting'));
+  client.on('close', () => setMqttStatus('off'));
+  client.on('error', e => { setMqttStatus('off'); log(`MQTT fout: ${e.message}`, 'err'); });
+  client.on('message', (_topic, buf) => {
+    try { ingestLive(JSON.parse(buf.toString())); } catch (_) {}
+  });
+}
+
+// ─── Automatisch pucks ontdekken via Google Find My ──────────────────────────
+const scanBtn = document.getElementById('scanBtn');
+const addAllBtn = document.getElementById('addAllBtn');
+const discoverList = document.getElementById('discover-list');
+const discStatus = document.getElementById('disc-status');
+let discovered = [];
+let scanning = false;
+
+function renderDiscoverList() {
+  discoverList.innerHTML = '';
+  const newOnes = discovered.filter(p => !p.already_added);
+  addAllBtn.style.display = newOnes.length > 1 ? '' : 'none';
+  document.getElementById('clearScanBtn').style.display = discovered.length ? '' : 'none';
+
+  if (discovered.length === 0) {
+    discStatus.textContent = scanning ? '' : 'Nog niets gescand.';
+    return;
+  }
+  discStatus.textContent = `${discovered.length} puck(s) gevonden — ${newOnes.length} nieuw.`;
+
+  discovered.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'disc-item';
+    const action = p.already_added
+      ? `<span class="disc-added">✓ toegevoegd</span>`
+      : `<button class="disc-add" data-id="${p.device_id}">+ Toevoegen</button>`;
+    row.innerHTML = `
+      <div class="disc-meta">
+        <div class="disc-name">${p.name}</div>
+        <div class="disc-id">${p.device_id}</div>
+      </div>
+      ${action}`;
+    const btn = row.querySelector('.disc-add');
+    if (btn) btn.addEventListener('click', () => addDiscovered(p));
+    discoverList.appendChild(row);
+  });
+}
+
+async function scanDevices() {
+  if (scanning) return;
+  scanning = true;
+  scanBtn.disabled = true;
+  scanBtn.textContent = 'Scannen…';
+  discStatus.textContent = 'Bezig met scannen van Google Find My… dit kan even duren.';
+  log('Scan van Google Find My gestart', 'hi');
+  try {
+    const base = apiBaseEl.value.replace(/\/$/, '');
+    const res = await fetch(`${base}/api/discover`, { cache: 'no-store', headers: authHeaders() });
+    if (handle401(res)) { scanning=false; scanBtn.disabled=false; scanBtn.textContent='⟳ Scan Google Find My'; return; }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
+    discovered = body.pucks || [];
+    renderDiscoverList();
+    log(`${discovered.length} puck(s) gevonden bij Google Find My`, 'hi');
+  } catch (err) {
+    discStatus.textContent = `Fout: ${err.message}`;
+    showToast(`Scan mislukt: ${err.message}`);
+    log(`Scan mislukt: ${err.message}`, 'err');
+  } finally {
+    scanning = false;
+    scanBtn.disabled = false;
+    scanBtn.textContent = '⟳ Scan Google Find My';
+  }
+}
+
+async function postDevice(payload) {
+  const base = apiBaseEl.value.replace(/\/$/, '');
+  const res = await fetch(`${base}/api/devices`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  if (handle401(res)) return false;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return true;
+}
+
+// Bij toevoegen: vraag naam (vooraf ingevuld) + categorie via de modal.
+function addDiscovered(puck) {
+  openPuckModal({
+    title: 'Puck toevoegen',
+    name: puck.name,
+    category: '',
+    onSave: async (name, category) => {
+      try {
+        await postDevice({ name, device_id: puck.device_id, index: puck.index, category });
+        const local = discovered.find(p => p.device_id === puck.device_id);
+        if (local) local.already_added = true;
+        renderDiscoverList();
+        showToast(`${name} toegevoegd`);
+        refresh();
+        return true;
+      } catch (err) { showToast(`Fout: ${err.message}`); return false; }
+    },
+  });
+}
+
+// "Alle nieuwe": bulk toevoegen zonder categorie (achteraf te wijzigen via ✎).
+async function addAllNew() {
+  const newOnes = discovered.filter(p => !p.already_added);
+  let added = 0;
+  for (const puck of newOnes) {
+    try {
+      await postDevice({ name: puck.name, device_id: puck.device_id, index: puck.index });
+      const local = discovered.find(p => p.device_id === puck.device_id);
+      if (local) local.already_added = true;
+      added++;
+    } catch (_) {}
+  }
+  renderDiscoverList();
+  showToast(`${added} puck(s) toegevoegd`);
+  refresh();
+}
+
+function loadDemo() {
+  const ts = new Date().toISOString().slice(0,19).replace('T',' ');
+  const demoDevices = [
+    { name:'FnR 6ATAG72R (1)', device_id:'FnR-DEMO-1' },
+    { name:'FnR 6ATAG72R (2)', device_id:'FnR-DEMO-2' },
+    { name:'Chipolo LOOP', device_id:'CHIP-DEMO' },
+  ];
+  S.pingCounts['FnR-DEMO-1'] = 12400;
+  S.pingCounts['FnR-DEMO-2'] = 87000;
+  S.pingCounts['CHIP-DEMO']  = 195000;
+  applyAll({
+    'FnR-DEMO-1': { device_id:'FnR-DEMO-1', name:'FnR 6ATAG72R (1)', latitude:51.1732, longitude:4.3714, timestamp:ts, received:ts, battery:null, status:1 },
+    'FnR-DEMO-2': { device_id:'FnR-DEMO-2', name:'FnR 6ATAG72R (2)', latitude:51.2194, longitude:4.4025, timestamp:ts, received:ts, battery:null, status:1 },
+    'CHIP-DEMO':  { device_id:'CHIP-DEMO',  name:'Chipolo LOOP', latitude:51.1580, longitude:4.3490, timestamp:ts, received:ts, battery:null, status:1 },
+  }, demoDevices);
+  tickerMsg.textContent = 'Demo modus';
+  tickerMsg.style.color = 'var(--warn)';
+}
+
+// ─── Tracking: dezelfde functionaliteit als tracker_writer.py ────────────────
+const trackBtn = document.getElementById('trackBtn');
+let tracking = false;
+let trackBusy = false;
+const seenTrackLog = new Set();
+
+function setTrackBtn(running) {
+  tracking = running;
+  trackBtn.textContent = running ? '⏹ Stop tracking' : '▶ Start tracking';
+  trackBtn.classList.toggle('btn-primary', !running);
+  trackBtn.classList.toggle('btn-danger', running);
+}
+
+function applyTrackingStatus(st) {
+  setTrackBtn(!!st.running);
+  // Toon nieuwe backend-logregels in het live log (zonder duplicaten).
+  (st.log || []).forEach(entry => {
+    const key = `${entry.time}|${entry.message}`;
+    if (seenTrackLog.has(key)) return;
+    seenTrackLog.add(key);
+    log(`▣ ${entry.message}`, entry.level === 'error' ? 'err' : 'hi');
+  });
+  if (seenTrackLog.size > 400) seenTrackLog.clear();
+}
+
+async function fetchTrackingStatus() {
+  try {
+    const base = apiBaseEl.value.replace(/\/$/, '');
+    const res = await fetch(`${base}/api/tracking/status`, { cache: 'no-store' });
+    if (!res.ok) return;
+    applyTrackingStatus(await res.json());
+  } catch (_) {}
+}
+
+async function toggleTracking() {
+  if (trackBusy) return;
+  trackBusy = true;
+  const base = apiBaseEl.value.replace(/\/$/, '');
+  const action = tracking ? 'stop' : 'start';
+  try {
+    const res = await fetch(`${base}/api/tracking/${action}`, { method: 'POST', headers: authHeaders() });
+    if (handle401(res)) { trackBusy = false; return; }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
+    if (body.status) applyTrackingStatus(body.status);
+    showToast(action === 'start' ? 'Tracking gestart' : 'Tracking gestopt');
+    refresh();
+  } catch (err) {
+    showToast(`Fout: ${err.message}`);
+  } finally {
+    trackBusy = false;
+  }
+}
+
+trackBtn.addEventListener('click', toggleTracking);
+
+document.getElementById('refreshBtn').addEventListener('click', refresh);
+document.getElementById('demoBtn').addEventListener('click', loadDemo);
+scanBtn.addEventListener('click', scanDevices);
+addAllBtn.addEventListener('click', addAllNew);
+document.getElementById('clearScanBtn').addEventListener('click', () => {
+  discovered = [];
+  discStatus.textContent = '';
+  renderDiscoverList();
+});
+mqttUrlEl.addEventListener('change', connectMqtt);
+document.getElementById('displayToggle').addEventListener('click', toggleDisplayMode);
+
+// ⚙ instellingen-popover
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsPop = document.getElementById('settingsPop');
+settingsBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  settingsPop.style.display = settingsPop.style.display === 'none' ? 'block' : 'none';
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.settings-wrap')) settingsPop.style.display = 'none';
+});
+
+setAdminUI(false);
+applyDisplayMode();
+fetchAdminStatus();
+fetchAuthStatus();
+fetchPingCounts();
+fetchTrackingStatus();
+refresh();
+connectMqtt();
+setInterval(refresh, 10000);
+setInterval(fetchPingCounts, 60000);
+setInterval(fetchTrackingStatus, 5000);
+setInterval(fetchAuthStatus, 4000);
+setInterval(fetchAdminStatus, 30000);
+</script>
+</body>
+</html>
