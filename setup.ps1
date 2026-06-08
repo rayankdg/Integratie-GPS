@@ -102,8 +102,25 @@ if (-not $MosqExe) {
     Write-Host "  Download van: https://mosquitto.org/download/" -ForegroundColor Yellow
     $inp = Read-Host "  Pad naar mosquitto.exe (leeg = overslaan)"
     if ($inp -and (Test-Path $inp)) { $MosqExe = $inp }
-} else {
+}
+
+if ($MosqExe) {
     Write-Host "  OK: $MosqExe" -ForegroundColor Green
+
+    # Mosquitto-service uitschakelen zodat START.bat geen admin nodig heeft
+    $svc = Get-Service mosquitto -ErrorAction SilentlyContinue
+    if ($svc -and $svc.StartType -ne "Disabled") {
+        Write-Host ""
+        Write-Host "  De Mosquitto Windows-service staat aan." -ForegroundColor Yellow
+        Write-Host "  Die wordt eenmalig uitgeschakeld zodat START.bat geen admin nodig heeft." -ForegroundColor White
+        Write-Host "  Er verschijnt een pop-up - klik 'Ja' om door te gaan." -ForegroundColor Cyan
+        Write-Host ""
+        Start-Process powershell -Verb RunAs -Wait -ArgumentList @(
+            "-NoProfile", "-Command",
+            "Stop-Service mosquitto -ErrorAction SilentlyContinue; Set-Service mosquitto -StartupType Disabled; Write-Host 'Mosquitto-service uitgeschakeld.'"
+        )
+        Write-Host "  OK: Mosquitto-service uitgeschakeld. START.bat werkt nu zonder admin." -ForegroundColor Green
+    }
 }
 
 # --- 4. InfluxDB 3 Core ---

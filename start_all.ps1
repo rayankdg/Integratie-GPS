@@ -131,10 +131,22 @@ if (-not $MosqExe) {
     }
 }
 
-# 3. MQTT -> InfluxDB bridge
-Write-Host "[3/4] Bridge starten..." -ForegroundColor Green
-Start-InWindow "Bridge MQTT-InfluxDB" "Set-Location '$ProjectDir'; & '$PyExe' mqtt_influx_bridge.py"
+# 3. MQTT -> InfluxDB bridge (zichtbaar venster zodat je berichten kan zien)
+Write-Host "[3/4] MQTT-bridge starten..." -ForegroundColor Green
+$bridgeCmd = "Set-Location '$ProjectDir'; Write-Host 'MQTT-monitor — berichten verschijnen hier als pucks data sturen.' -ForegroundColor Cyan; Write-Host ''; & '$PyExe' mqtt_influx_bridge.py"
+Start-InWindow "MQTT-monitor" $bridgeCmd
 Start-Sleep -Seconds 2
+
+# MQTT Explorer openen als het geinstalleerd is
+$mqttExplorer = @(
+    "$env:LOCALAPPDATA\Programs\MQTT Explorer\MQTT Explorer.exe",
+    "$env:ProgramFiles\MQTT Explorer\MQTT Explorer.exe",
+    "${env:ProgramFiles(x86)}\MQTT Explorer\MQTT Explorer.exe"
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($mqttExplorer) {
+    Write-Host "     MQTT Explorer openen..." -ForegroundColor Green
+    Start-Process $mqttExplorer
+}
 
 # 4. Website-backend
 if (Test-Port 8000) {
