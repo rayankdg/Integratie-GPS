@@ -88,6 +88,13 @@ def discover_devices() -> list[dict[str, str]]:
                 "device_id": match.group(3).strip(),
             }
         )
+    if not devices:
+        # Geef de ruwe output terug als foutmelding zodat de oorzaak zichtbaar is
+        preview = output.strip()[:600] or "(geen output)"
+        raise RuntimeError(
+            f"Geen apparaten gevonden in Google Find My.\n\n"
+            f"Ruwe output van main.py:\n{preview}"
+        )
     return devices
 
 

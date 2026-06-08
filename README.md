@@ -78,12 +78,17 @@ De setup vraagt om een wachtwoord voor het beheerpaneel op de website. Kies iets
 
 ### Stap 4 — Google-account koppelen (eenmalig)
 
-Zorg dat Chrome ingelogd is op het Google-account waaraan je pucks zijn gekoppeld, en voer dan uit:
+Zorg dat Chrome ingelogd is op het Google-account waaraan je pucks zijn gekoppeld.
 
-```bash
+Open een terminal in de projectmap en voer uit:
+
+```powershell
+.\venv\Scripts\activate
 python do_google_login.py
 python do_shared_key.py
 ```
+
+> De eerste regel (`.\venv\Scripts\activate`) is verplicht. Zonder die stap gebruikt Windows de verkeerde Python en ontbreken de geïnstalleerde packages (`No module named 'nodriver'`).
 
 De authenticatiegegevens worden opgeslagen in `Auth/secrets.json` (ook niet in git).
 

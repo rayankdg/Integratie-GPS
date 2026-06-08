@@ -329,8 +329,12 @@ Write-Host ""
 Write-Host "  Laatste stap: Google-account koppelen (eenmalig)." -ForegroundColor White
 Write-Host ""
 Write-Host "  Open een terminal in de projectmap en voer uit:" -ForegroundColor White
+Write-Host "    .\venv\Scripts\activate" -ForegroundColor Yellow
 Write-Host "    python do_google_login.py" -ForegroundColor Yellow
 Write-Host "    python do_shared_key.py" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  Let op: de eerste regel (activate) is verplicht." -ForegroundColor Gray
+Write-Host "  Zonder die stap ontbreken de geinstalleerde packages." -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Daarna: dubbelklik START.bat" -ForegroundColor Green
 Write-Host ""
