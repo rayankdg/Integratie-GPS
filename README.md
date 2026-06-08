@@ -1,55 +1,166 @@
-# GoogleFindMyTools
+# GPS Puck Tracker — Integratie-GPS
 
-This repository includes some useful tools that reimplement parts of Google's Find My Device Network (now called Find Hub Network). Note that the code of this repo is still very experimental.
+Een volledig GPS-tracking systeem dat GPS-pucks (Find My Device-trackers) volgt via het Google Find Hub Network en hun locatie weergeeft op een live web-dashboard.
 
-### What's possible?
-Currently, it is possible to query Find My Device / Find Hub trackers and Android devices, read out their E2EE keys, and decrypt encrypted locations sent from the Find My Device / Find Hub network. You can also send register your own ESP32- or Zephyr-based trackers, as described below.
-
-### How to use
-
-> [!CAUTION]
-> Before starting, ensure you have Chrome and Python updated.
-> 
-> **If Chrome is not up to date, the script will NOT work, guaranteed!**
-
-- Clone this repository: `git clone` or download the ZIP file
-- Change into the directory: `cd GoogleFindMyTools`
-- Optional: Create venv: `python -m venv venv`
-- Optional: Activate venv: `venv\Scripts\activate` (Windows) or `source venv/bin/activate` (Linux & macOS)
-- Install all required packages: `pip install -r requirements.txt`
-- Install the latest version of Google Chrome: https://www.google.com/chrome/
-- Start the program by running [main.py](main.py): `python main.py` or `python3 main.py`
-
-### Authentication
-
-On the first run, an authentication sequence is executed, which requires a computer with access to Google Chrome.
-
-The authentication results are stored in `Auth/secrets.json`. If you intend to run this tool on a headless machine, you can just copy this file to avoid having to use Chrome.
-
-### Known Issues
-- "Your encryption data is locked on your device" is shown if you have never set up Find My Device on an Android device. Solution: Login with your Google Account on an Android device, go to Settings > Google > All Services > Find My Device > Find your offline devices > enable "With network in all areas" or "With network in high-traffic areas only". If "Find your offline devices" is not shown in Settings, you will need to download the Find My Device app from Google's Play Store, and pair a real Find My Device tracker with your device to force-enable the Find My Device network.
-- No support for trackers using the P-256 curve and 32-Byte advertisements. Regular trackers don't seem to use this curve at all - I can only confirm that it is used with Sony's WH1000XM5 headphones.
-- No support for the authentication process on ARM Linux
-- If you receive "ssl.SSLCertVerificationError" when running the script, try to follow [this answer](https://stackoverflow.com/a/53310545).
-- Please also consider the issues listed in the [README in the ESP32Firmware folder](ESP32Firmware/README.md) if you want to register custom trackers.
-
-### Firmware for custom ESP32-based trackers
-If you want to use an ESP32 as a custom Find My Device tracker, you can find the firmware in the folder ESP32Firmware. To register a new tracker, run main.py and press 'r' if you are asked to. Afterward, follow the instructions on-screen.
-
-For more information, check the [README in the ESP32Firmware folder](ESP32Firmware/README.md).
-
-### Firmware for custom Zephyr-based trackers
-If you want to use a Zephyr-supported BLE device (e.g. nRF51/52) as a custom Find My Device tracker, you can find the firmware in the folder ZephyrFirmware. To register a new tracker, run main.py and press 'r' if you are asked to. Afterward, follow the instructions on-screen.
-
-For more information, check the [README in the ZephyrFirmware folder](ZephyrFirmware/README.md).
-
-### iOS App
-You can also use my [iOS App](https://testflight.apple.com/join/rGqa2mTe) to access your Find My Device trackers on the go.
+> **Gebouwd op basis van [GoogleFindMyTools](https://github.com/leonbottger/GoogleFindMyTools) door Leon Böttger.**  
+> De originele bibliotheek verzorgt de authenticatie en communicatie met de Google Find Hub API. Rondom die basis is dit project gebouwd: een FastAPI-backend, een live web-dashboard, MQTT-integratie en een achtergrond-tracking service.
 
 ---
 
-### Team
+## Wat doet dit project?
+
+- Haalt automatisch de locatie van GPS-pucks op via het **Google Find Hub Network**
+- Slaat locatiedata op (laatste positie, geschiedenis) als JSON
+- Publiceert locaties via **MQTT** (Mosquitto)
+- Stuurt data door naar **InfluxDB** voor tijdreeksen
+- Toont alles op een **live web-dashboard** (kaart met markers, geschiedenis, per-puck status)
+- Beheerpaneel met admin-login voor het toevoegen/verwijderen van pucks
+
+---
+
+## Stappenplan — installatie & gebruik
+
+### Stap 1 — Vereisten installeren
+
+Zorg dat je het volgende hebt:
+
+- **Python 3.11+** — [python.org](https://www.python.org/downloads/)
+- **Google Chrome** (laatste versie) — [google.com/chrome](https://www.google.com/chrome/)
+- **Mosquitto MQTT broker** — [mosquitto.org](https://mosquitto.org/download/)
+- **InfluxDB 3 Core** — [influxdata.com](https://www.influxdata.com/downloads/)
+
+Installeer de Python-dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+### Stap 2 — Configuratie instellen
+
+Kopieer `secrets.h` en pas de waarden aan:
+
+```c
+#define INFLUX_HOST     "http://localhost:8181"
+#define INFLUX_TOKEN    "jouw-influxdb-token"
+#define INFLUX_DATABASE "gps"
+
+#define MQTT_HOST       "localhost"
+#define MQTT_PORT       1883
+#define MQTT_TOPIC      "gpsTracker/pucks/+/location"
+
+#define ADMIN_PASSWORD  "kies-een-sterk-wachtwoord"
+```
+
+> `secrets.h` staat in `.gitignore` en wordt nooit naar GitHub gepusht.
+
+---
+
+### Stap 3 — Google-account koppelen (eenmalig)
+
+De tracker heeft toegang nodig tot je Google-account om pucks op te vragen.
+
+1. Zorg dat Chrome is ingelogd op het Google-account waaraan je pucks zijn gekoppeld
+2. Start de authenticatie:
+
+```bash
+python do_google_login.py
+```
+
+3. Haal de E2EE-ontsleutelsleutels op:
+
+```bash
+python do_shared_key.py
+```
+
+De resultaten worden opgeslagen in `Auth/secrets.json` (niet in git).
+
+---
+
+### Stap 4 — Pucks toevoegen
+
+Voeg je GPS-pucks toe via de terminal-wizard:
+
+```bash
+python tracker_writer.py
+```
+
+Kies optie **2 — Voeg een nieuwe puck toe**. De wizard haalt automatisch de beschikbare apparaten op uit Google Find My.
+
+Of doe het via het web-dashboard (zie stap 5) onder **Admin → Pucks beheren**.
+
+---
+
+### Stap 5 — Alles starten
+
+**Windows (aanbevolen):**
+
+```
+START.bat
+```
+
+Of handmatig via PowerShell:
+
+```powershell
+.\start_all.ps1
+```
+
+Dit start:
+- De FastAPI-backend op `http://localhost:8000`
+- De MQTT-broker (Mosquitto)
+- De InfluxDB-bridge
+
+Open daarna het dashboard: **[http://localhost:8000](http://localhost:8000)**
+
+---
+
+### Stap 6 — Tracking starten
+
+1. Ga naar `http://localhost:8000`
+2. Log in als admin (wachtwoord uit `secrets.h`)
+3. Klik op **Start tracking**
+
+De pucks worden nu elke 30 seconden bijgewerkt.
+
+---
+
+## Projectstructuur
+
+```
+├── app.py                  # FastAPI backend + alle API-endpoints
+├── tracking_service.py     # Achtergrond-tracking (threads per puck)
+├── tracker_writer.py       # Data lezen/schrijven + terminal-menu
+├── google_findmy_bridge.py # Brug naar de GoogleFindMyTools CLI
+├── auth_service.py         # Google-account beheer
+├── admin_auth.py           # Admin-login logica
+├── mqtt_publisher.py       # MQTT publicatie
+├── mqtt_influx_bridge.py   # InfluxDB bridge
+├── secrets_loader.py       # Laadt secrets.h in Python
+├── secrets.h               # Configuratie (NIET in git)
+├── START.bat               # Windows opstart-script
+├── start_all.ps1           # PowerShell opstart-script
+├── webapp/                 # Web-dashboard (HTML/JS/CSS)
+├── data/                   # Locatiedata (NIET in git)
+│   ├── latest.json
+│   ├── latest_all.json
+│   └── history.jsonl
+├── Auth/                   # GoogleFindMyTools authenticatie
+├── NovaApi/                # Google Nova API-aanroepen
+└── ...                     # Overige GoogleFindMyTools bibliotheek
+```
+
+---
+
+## Team
+
 - Rayan ([@rayankdg](https://github.com/rayankdg))
 - Valentina
 - Mohammed ([@menoilimohmammedriyad-del](https://github.com/menoilimohmammedriyad-del))
 - Asif ([@Asifbenhaddou](https://github.com/Asifbenhaddou))
+
+---
+
+## Licentie
+
+De GoogleFindMyTools-basis valt onder de originele licentie van Leon Böttger (zie [LICENSE](LICENSE)).
