@@ -143,7 +143,8 @@ def main() -> None:
         label = p.get("name", p.get("device_id"))
         try:
             influx.write(point)
-            print(f"[bridge] → InfluxDB  {label}  {p.get('latitude')}, {p.get('longitude')}")
+            ts = p.get('timestamp') or p.get('received') or ''
+            print(f"[bridge] → InfluxDB  {label}  {ts}  {p.get('latitude')}, {p.get('longitude')}")
         except Exception:
             buffer_point(point)
             with _buffer_lock:
