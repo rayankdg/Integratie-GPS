@@ -203,6 +203,7 @@
           <button class="btn btn-ghost" id="demoBtn">Demo</button>
         </div>
         <button class="btn btn-ghost" id="tokenLoginBtn" style="margin-top:10px;width:100%">🔑 Inloggen met token</button>
+        <button class="btn btn-ghost" id="reKeysBtn" style="margin-top:6px;width:100%">🔐 Sleutels opnieuw ophalen</button>
       </div>
     </div>
     <button class="btn btn-ghost" id="adminLoginBtn">🔒 Admin login</button>
@@ -1047,6 +1048,10 @@ async function logoutGoogle() {
 googleBtn.addEventListener('click', connectGoogle);
 keysBtn.addEventListener('click', retrieveKeys);
 logoutBtn.addEventListener('click', logoutGoogle);
+document.getElementById('reKeysBtn').addEventListener('click', () => {
+  settingsPop.style.display = 'none';
+  retrieveKeys();
+});
 
 // Inloggen met handmatig geplakt token (betrouwbaar alternatief voor de browser-login).
 const tokenModal = document.getElementById('tokenModal');

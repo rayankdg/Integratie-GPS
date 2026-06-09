@@ -88,11 +88,13 @@ Dit start InfluxDB, Mosquitto, de MQTT-bridge en de webserver op. De browser ope
 2. Klik op **🔒 Admin login** (rechtsboven) en voer het wachtwoord in dat je tijdens de setup hebt ingesteld
 3. Klik op **🔑 Google verbinden** — Chrome opent automatisch op de Google-loginpagina
 4. Log in met het Google-account waaraan je pucks gekoppeld zijn
-5. Na het inloggen verschijnt de knop **🔐 Sleutels ophalen** — klik erop om de E2EE-sleutels op te halen (je telefoon kan vragen om bevestiging)
+5. Als de sleutels nog nooit zijn opgehaald, verschijnt de knop **🔐 Sleutels ophalen** — klik erop (je telefoon kan vragen om bevestiging). Is de knop er niet? Dan zijn de sleutels al gecached en hoef je niets te doen.
 
 De authenticatiegegevens worden opgeslagen in `Auth/secrets.json` (staat in `.gitignore`, wordt nooit gepusht).
 
-> Werkt Chrome niet? Gebruik dan de optie **"Inloggen met token"**: ga in je eigen browser naar [accounts.google.com/EmbeddedSetup](https://accounts.google.com/EmbeddedSetup), log in, druk F12 → Application → Cookies → zoek `oauth_token` en plak de waarde in het invulveld.
+> Sleutels later opnieuw ophalen nodig? Klik op **⚙** (rechtsboven) → **Sleutels opnieuw ophalen**.
+
+> Werkt Chrome niet? Gebruik dan **⚙ → Inloggen met token**: ga in je eigen browser naar [accounts.google.com/EmbeddedSetup](https://accounts.google.com/EmbeddedSetup), log in, druk F12 → Application → Cookies → zoek `oauth_token` en plak de waarde in het invulveld.
 
 ### Stap 6 — Pucks toevoegen en tracking starten
 
