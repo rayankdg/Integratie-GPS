@@ -117,6 +117,9 @@ def parse_location_output(text: str, device: dict) -> dict:
     own    = OWN_RE.search(text)
     bat    = BAT_RE.search(text)
 
+    if "No locations found." in text:
+        raise RuntimeError("GEEN_LOCATIE: tracker tijdelijk niet zichtbaar in het Google Find My-netwerk.")
+
     if not lat or not lon or not ts:
         raise RuntimeError(f"Locatiedata niet gevonden in output:\n{text[:500]}")
 

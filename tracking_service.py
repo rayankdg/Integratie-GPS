@@ -204,9 +204,16 @@ class TrackingService:
                     f"{payload['latitude']}, {payload['longitude']}"
                 )
             except Exception as e:  # noqa: BLE001
-                self._set_status(device_id, name=name, state="error", message=str(e),
-                                 last_update=_now())
-                self._add_log(f"[{name}] Fout: {e}", "error")
+                msg = str(e)
+                if msg.startswith("GEEN_LOCATIE:"):
+                    self._set_status(device_id, name=name, state="no_location",
+                                     message="Geen recente locatie — tracker nog niet gezien door nabije Android-toestellen.",
+                                     last_update=_now())
+                    self._add_log(f"[{name}] Geen recente locatiedata beschikbaar.", "warn")
+                else:
+                    self._set_status(device_id, name=name, state="error", message=msg,
+                                     last_update=_now())
+                    self._add_log(f"[{name}] Fout: {msg}", "error")
 
             stop.wait(POLL_INTERVAL)
 
