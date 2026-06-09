@@ -76,39 +76,29 @@ De setup vraagt om een wachtwoord voor het beheerpaneel op de website. Kies iets
 
 > `secrets.h` staat in `.gitignore` en wordt nooit gepusht. Gebruik `secrets.h.example` als referentie.
 
-### Stap 4 — Google-account koppelen (eenmalig)
-
-Zorg dat Chrome ingelogd is op het Google-account waaraan je pucks zijn gekoppeld.
-
-Open een terminal in de projectmap en voer uit:
-
-```powershell
-.\venv\Scripts\activate
-python do_google_login.py
-python do_shared_key.py
-```
-
-> De eerste regel (`.\venv\Scripts\activate`) is verplicht. Zonder die stap gebruikt Windows de verkeerde Python en ontbreken de geïnstalleerde packages (`No module named 'nodriver'`).
-
-De authenticatiegegevens worden opgeslagen in `Auth/secrets.json` (ook niet in git).
-
-### Stap 5 — Opstarten
+### Stap 4 — Opstarten
 
 Dubbelklik **`START.bat`**.
 
 Dit start InfluxDB, Mosquitto, de MQTT-bridge en de webserver op. De browser opent automatisch op `http://localhost:8000`.
 
-Als `local.ps1` nog niet bestaat (eerste keer), wordt de setup eerst automatisch uitgevoerd.
+### Stap 5 — Google-account koppelen (eenmalig, via de website)
+
+1. Ga naar `http://localhost:8000`
+2. Klik op **🔒 Admin login** (rechtsboven) en voer het wachtwoord in dat je tijdens de setup hebt ingesteld
+3. Klik op **🔑 Google verbinden** — Chrome opent automatisch op de Google-loginpagina
+4. Log in met het Google-account waaraan je pucks gekoppeld zijn
+5. Na het inloggen verschijnt de knop **🔐 Sleutels ophalen** — klik erop om de E2EE-sleutels op te halen (je telefoon kan vragen om bevestiging)
+
+De authenticatiegegevens worden opgeslagen in `Auth/secrets.json` (staat in `.gitignore`, wordt nooit gepusht).
+
+> Werkt Chrome niet? Gebruik dan de optie **"Inloggen met token"**: ga in je eigen browser naar [accounts.google.com/EmbeddedSetup](https://accounts.google.com/EmbeddedSetup), log in, druk F12 → Application → Cookies → zoek `oauth_token` en plak de waarde in het invulveld.
 
 ### Stap 6 — Pucks toevoegen en tracking starten
 
-1. Ga naar `http://localhost:8000`
-2. Log in als admin met het wachtwoord uit `secrets.h`
-3. Voeg pucks toe via **Admin → Pucks beheren** of via de terminal:
-   ```bash
-   python tracker_writer.py
-   ```
-4. Klik op **Start tracking** — pucks worden elke 30 seconden bijgewerkt
+1. Klik op **⟳ Scan Google Find My** in de zijbalk — het systeem zoekt automatisch alle gekoppelde pucks
+2. Klik op **+** naast de pucks die je wil volgen om ze toe te voegen
+3. Klik op **▶ Start tracking** — pucks worden elke 30 seconden bijgewerkt
 
 ---
 
