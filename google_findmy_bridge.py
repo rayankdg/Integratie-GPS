@@ -89,8 +89,19 @@ def discover_devices() -> list[dict[str, str]]:
             }
         )
     if not devices:
-        # Geef de ruwe output terug als foutmelding zodat de oorzaak zichtbaar is
-        preview = output.strip()[:600] or "(geen output)"
+        lower = output.lower()
+        if "google-account niet verbonden" in lower or "niet verbonden" in lower:
+            raise RuntimeError(
+                "Google-account niet verbonden. "
+                "Klik op 'Google verbinden' in de zijbalk om in te loggen."
+            )
+        if "sessie verlopen" in lower or "session expired" in lower:
+            raise RuntimeError(
+                "Google-sessie verlopen. "
+                "Klik op 'Google verbinden' om opnieuw in te loggen."
+            )
+        raw = output.strip()
+        preview = ("...\n" + raw[-600:]) if len(raw) > 600 else (raw or "(geen output)")
         raise RuntimeError(
             f"Geen apparaten gevonden in Google Find My.\n\n"
             f"Ruwe output van main.py:\n{preview}"

@@ -15,6 +15,16 @@ from google_findmy_bridge import discover_devices
 app = FastAPI()
 
 
+@app.on_event("startup")
+async def _auto_start_tracking() -> None:
+    """Start tracking automatisch als Google-auth geldig is en er pucks zijn."""
+    try:
+        if auth_service.status().get("logged_in") and load_devices():
+            tracking_service.start()
+    except Exception:
+        pass
+
+
 def require_admin(authorization: str | None = Header(default=None)) -> bool:
     """Dependency die wijzig-endpoints beschermt: vereist een geldig admin-token."""
     token = admin_auth.token_from_header(authorization)

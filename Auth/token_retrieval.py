@@ -7,6 +7,7 @@ import gpsoauth
 
 from Auth.aas_token_retrieval import get_aas_token
 from Auth.fcm_receiver import FcmReceiver
+from Auth.token_cache import delete_cached_value
 
 
 def request_token(username, scope, play_services = False):
@@ -20,6 +21,16 @@ def request_token(username, scope, play_services = False):
         service='oauth2:https://www.googleapis.com/auth/' + scope,
         app=request_app,
         client_sig='38918a453d07199354f8b19af05ec6562ced5788')
-    token = auth_response['Auth']
 
-    return token
+    if 'Auth' not in auth_response:
+        # Controleer of het echt een verlopen sessie is (Error=NeedsBrowser/BadAuthentication)
+        # of een tijdelijke fout. Wis het token alleen bij echte auth-fouten.
+        err = auth_response.get('Error', '')
+        if err in ('NeedsBrowser', 'BadAuthentication', 'TokenExpired', 'InvalidCredentials'):
+            delete_cached_value('aas_token')
+        raise RuntimeError(
+            "Google-sessie verlopen. "
+            "Herverbind je account via de webapp -> Google Auth -> Login."
+        )
+
+    return auth_response['Auth']

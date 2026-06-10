@@ -12,16 +12,40 @@ require_admin-dependency of het token geldig is.
 from __future__ import annotations
 
 import hmac
+import json
 import secrets as _secrets
 import threading
 import time
+from pathlib import Path
 
 from secrets_loader import load_secrets
 
-SESSION_TTL = 12 * 3600  # tokens 12 uur geldig
+SESSION_TTL = 30 * 24 * 3600  # tokens 30 dagen geldig
 
-_sessions: dict[str, float] = {}  # token -> verloopt op (epoch)
+_SESSION_FILE = Path(__file__).parent / "data" / ".admin_sessions.json"
+
 _lock = threading.Lock()
+
+
+def _load_sessions() -> dict[str, float]:
+    try:
+        if _SESSION_FILE.exists():
+            data = json.loads(_SESSION_FILE.read_text(encoding="utf-8"))
+            return {k: float(v) for k, v in data.items() if isinstance(v, (int, float))}
+    except Exception:
+        pass
+    return {}
+
+
+def _save_sessions(sessions: dict[str, float]) -> None:
+    try:
+        _SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _SESSION_FILE.write_text(json.dumps(sessions), encoding="utf-8")
+    except Exception:
+        pass
+
+
+_sessions: dict[str, float] = _load_sessions()
 
 
 def _admin_password() -> str:
@@ -44,6 +68,7 @@ def login(password: str) -> str | None:
     with _lock:
         _sessions[token] = time.time() + SESSION_TTL
         _prune()
+        _save_sessions(dict(_sessions))
     return token
 
 
@@ -56,6 +81,7 @@ def validate(token: str | None) -> bool:
             return False
         if expiry < time.time():
             _sessions.pop(token, None)
+            _save_sessions(dict(_sessions))
             return False
         return True
 
@@ -65,11 +91,12 @@ def logout(token: str | None) -> None:
         return
     with _lock:
         _sessions.pop(token, None)
+        _save_sessions(dict(_sessions))
 
 
 def _prune() -> None:
     now = time.time()
-    for tok in [t for t, exp in _sessions.items() if exp < now]:
+    for tok in [t for t, exp in list(_sessions.items()) if exp < now]:
         _sessions.pop(tok, None)
 
 

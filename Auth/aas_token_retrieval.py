@@ -7,7 +7,7 @@ import gpsoauth
 
 from Auth.auth_flow import request_oauth_account_token_flow
 from Auth.fcm_receiver import FcmReceiver
-from Auth.token_cache import get_cached_value_or_set, set_cached_value
+from Auth.token_cache import get_cached_value, get_cached_value_or_set, set_cached_value
 from Auth.username_provider import get_username, username_string
 
 
@@ -27,7 +27,13 @@ def _generate_aas_token():
 
 
 def get_aas_token():
-    return get_cached_value_or_set('aas_token', _generate_aas_token)
+    token = get_cached_value('aas_token')
+    if not token:
+        raise RuntimeError(
+            "Google-account niet verbonden. "
+            "Verbind je account via de webapp → Google Auth → Login."
+        )
+    return token
 
 
 if __name__ == '__main__':

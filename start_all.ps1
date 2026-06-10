@@ -114,20 +114,31 @@ if (-not $MosqExe) {
 } else {
     $svc = Get-Service mosquitto -ErrorAction SilentlyContinue
     if ($svc -and $svc.Status -eq "Running") {
+        Write-Host "[2/4] Mosquitto-service stoppen om te herstarten met websockets..." -ForegroundColor Green
         try {
-            Stop-Service mosquitto -ErrorAction Stop
-            Write-Host "[2/4] Mosquitto-service gestopt om te herstarten met websockets." -ForegroundColor Green
-            Start-Sleep -Seconds 1
+            Stop-Service mosquitto -Force -ErrorAction Stop
+            Write-Host "     Service gestopt." -ForegroundColor Green
         } catch {
-            Write-Host "[2/4] LET OP: kon Mosquitto-service niet stoppen (admin nodig)." -ForegroundColor Red
+            Write-Host "     Stop-Service mislukt (geen admin) - stop via Stop-Process." -ForegroundColor Yellow
+            Stop-Process -Name mosquitto -Force -ErrorAction SilentlyContinue
         }
+        # Wacht tot poort 1883 daadwerkelijk vrijkomt (max 15 seconden)
+        Write-Host "     Wachten tot poort 1883 vrijkomt..." -NoNewline
+        $freed = $false
+        for ($i = 0; $i -lt 15; $i++) {
+            if (-not (Test-Port 1883)) { $freed = $true; break }
+            Start-Sleep -Seconds 1
+            Write-Host "." -NoNewline
+        }
+        if ($freed) { Write-Host " vrij." } else { Write-Host " timeout." }
     }
     if (-not (Test-Port 1883)) {
         Write-Host "[2/4] Mosquitto starten (poorten 1883 + 9001)..." -ForegroundColor Green
         Start-InWindow "Mosquitto" "& '$MosqExe' -c '$MosqConf' -v"
         Wait-Port 1883 "Mosquitto" | Out-Null
     } else {
-        Write-Host "[2/4] Poort 1883 bezet - websockets mogelijk niet actief." -ForegroundColor Yellow
+        Write-Host "[2/4] Poort 1883 nog bezet - Mosquitto al actief of geblokkeerd door ander proces." -ForegroundColor Red
+        Write-Host "     Start PowerShell als administrator en draai START.bat opnieuw." -ForegroundColor Yellow
     }
 }
 

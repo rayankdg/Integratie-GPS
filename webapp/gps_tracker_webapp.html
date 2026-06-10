@@ -1357,7 +1357,7 @@ fetchPingCounts();
 fetchTrackingStatus();
 refresh();
 connectMqtt();
-setInterval(refresh, 10000);
+setInterval(refresh, 5000);
 setInterval(fetchPingCounts, 60000);
 setInterval(fetchTrackingStatus, 5000);
 setInterval(fetchAuthStatus, 4000);

@@ -51,6 +51,31 @@ def _parse_time(p: dict):
     return None
 
 
+def build_point(p: dict):
+    from influxdb_client_3 import Point
+
+    point = (
+        Point("location")
+        .tag("device_id", str(p.get("device_id", "")))
+        .tag("name", str(p.get("name", "")))
+    )
+    wrote_field = False
+    for f in ("latitude", "longitude", "altitude", "battery", "status"):
+        v = p.get(f)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            point.field(f, float(v))
+            wrote_field = True
+    if isinstance(p.get("own_report"), bool):
+        point.field("own_report", 1.0 if p["own_report"] else 0.0)
+        wrote_field = True
+    if not wrote_field:
+        return None
+    ts = _parse_time(p)
+    if ts is not None:
+        point.time(ts)
+    return point
+
+
 def main() -> None:
     # Direct doorstromen + UTF-8 (vermijdt cp1252-fouten op Windows-console).
     try:
@@ -69,33 +94,11 @@ def main() -> None:
     if not influx_token:
         raise SystemExit("Geen INFLUX_TOKEN in secrets.h gevonden.")
 
-    from influxdb_client_3 import InfluxDBClient3, Point
+    from influxdb_client_3 import InfluxDBClient3
     import paho.mqtt.client as mqtt
 
     influx = InfluxDBClient3(host=influx_host, token=influx_token, database=influx_db)
     print(f"[bridge] InfluxDB: {influx_host} db='{influx_db}'")
-
-    def build_point(p: dict):
-        point = (
-            Point("location")
-            .tag("device_id", str(p.get("device_id", "")))
-            .tag("name", str(p.get("name", "")))
-        )
-        wrote_field = False
-        for f in ("latitude", "longitude", "altitude", "battery", "status"):
-            v = p.get(f)
-            if isinstance(v, (int, float)) and not isinstance(v, bool):
-                point.field(f, float(v))
-                wrote_field = True
-        if isinstance(p.get("own_report"), bool):
-            point.field("own_report", 1.0 if p["own_report"] else 0.0)
-            wrote_field = True
-        if not wrote_field:
-            return None
-        ts = _parse_time(p)
-        if ts is not None:
-            point.time(ts)
-        return point
 
     def buffer_point(point) -> None:
         with _buffer_lock:

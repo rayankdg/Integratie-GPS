@@ -51,6 +51,22 @@ def set_cached_value(name: str, value: str):
         json.dump(data, file)
 
 
+def delete_cached_value(name: str):
+    secrets_file = _get_secrets_file()
+    if not os.path.exists(secrets_file):
+        return
+    with open(secrets_file, 'r') as file:
+        try:
+            data = json.load(file)
+        except json.JSONDecodeError:
+            return
+    if name not in data:
+        return
+    data.pop(name)
+    with open(secrets_file, 'w') as file:
+        json.dump(data, file)
+
+
 def _get_secrets_file():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(script_dir, SECRETS_FILE)

@@ -39,7 +39,7 @@ LATEST_ALL    = DATA_DIR / "latest_all.json"
 HISTORY_FILE  = DATA_DIR / "history.jsonl"
 DEVICES_FILE  = DATA_DIR / "devices.json"
 
-POLL_INTERVAL = 30  # seconden
+POLL_INTERVAL = 15  # seconden
 
 # ─── Regex ────────────────────────────────────────────────────────────────────
 # Format: "1. Honor Magic V5: 6928dc79-0000-27db-8cf9-089e0825f0e8"
@@ -121,7 +121,11 @@ def parse_location_output(text: str, device: dict) -> dict:
         raise RuntimeError("GEEN_LOCATIE: tracker tijdelijk niet zichtbaar in het Google Find My-netwerk.")
 
     if not lat or not lon or not ts:
-        raise RuntimeError(f"Locatiedata niet gevonden in output:\n{text[:500]}")
+        # Toon de STAART van de output — daar staat de eigenlijke exception
+        tail = text.strip()
+        if len(tail) > 500:
+            tail = "...\n" + tail[-500:]
+        raise RuntimeError(f"Locatiedata niet gevonden in output:\n{tail}")
 
     return {
         "device_id":  device["device_id"],

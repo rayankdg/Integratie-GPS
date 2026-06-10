@@ -32,7 +32,9 @@ def nova_request(api_scope, hex_payload):
         return response.content.hex()
     else:
         soup = BeautifulSoup(response.text, 'html.parser')
-        print("[NovaRequest] Error: ", soup.get_text())
+        raise RuntimeError(
+            f"Google API fout ({response.status_code}): {soup.get_text()[:200].strip()}"
+        )
 
 
 if __name__ == '__main__':
