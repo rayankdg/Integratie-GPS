@@ -139,6 +139,7 @@ De authenticatiegegevens worden opgeslagen in `Auth/secrets.json` (staat in `.gi
 | Valentina | [@Shinobi815](https://github.com/Shinobi815) |
 | Mohammed | [@menoilimohmammedriyad-del](https://github.com/menoilimohmammedriyad-del) |
 | Asif | [@Asifbenhaddou](https://github.com/Asifbenhaddou) |
+| Xander | [@huxdeveloper](https://github.com/huxdeveloper) |
 
 ---
 
