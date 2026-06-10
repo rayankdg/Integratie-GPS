@@ -26,7 +26,7 @@ def nova_request(api_scope, hex_payload):
 
     payload = binascii.unhexlify(hex_payload)
 
-    response = requests.post(url, headers=headers, data=payload)
+    response = requests.post(url, headers=headers, data=payload, timeout=30)
 
     if response.status_code == 200:
         return response.content.hex()

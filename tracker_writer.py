@@ -71,7 +71,7 @@ def save_devices(devices: list[dict]) -> None:
 
 # ─── GoogleFindMyTools aanroepen ──────────────────────────────────────────────
 
-def run_main_py(stdin_input: str, timeout: int = 300) -> str:
+def run_main_py(stdin_input: str, timeout: int = 60) -> str:
     result = subprocess.run(
         [sys.executable, "main.py"],
         input=stdin_input,
